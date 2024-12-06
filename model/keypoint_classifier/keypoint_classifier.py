@@ -1,5 +1,7 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
+"""
+Keypoint Classifier Model module
+"""
 import numpy as np
 import tensorflow as tf
 
@@ -7,6 +9,7 @@ import tensorflow as tf
 class KeyPointClassifier(object):
     def __init__(
         self,
+        # path to the model to be opened in the jupyter notebook
         model_path='model/keypoint_classifier/keypoint_classifier.tflite',
         num_threads=1,
     ):
