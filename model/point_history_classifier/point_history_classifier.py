@@ -1,5 +1,7 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
+"""
+point history for robotic Arm movements and locations
+"""
 import numpy as np
 import tensorflow as tf
 
