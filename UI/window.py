@@ -80,7 +80,7 @@ class WindowUi(customtkinter.CTk):
         self.theme_mode_label.grid(row=4, column=0, padx=20, pady=(0, 50))
         # create menu for changing theme
         self.theme_mode_optionemenu = customtkinter.CTkOptionMenu(self.sidebar_frame,
-                                                                  values=[1, 2, 3, 4, 5],
+                                                                  values=["1", "2", "3", "4", "5"],
                                                                   command=self.change_Max_hands)
         self.theme_mode_optionemenu.grid(row=4, column=0, padx=20, pady=(10, 10))
         self.theme_mode_optionemenu.grid(row=4, column=0, padx=20, pady=(10, 10))
@@ -143,9 +143,9 @@ class WindowUi(customtkinter.CTk):
     def change_appearance_mode_event(self, new_appearance_mode: str):
         customtkinter.set_appearance_mode(new_appearance_mode)
 
-    def change_theme_mode_event(self, new_theme_mode: str):
-        customtkinter.set_default_color_theme(new_theme_mode)
-        self.update()
+    def change_Max_hands(self, value):
+        # Reinitialize MediaPipe Hands with updated parameters
+        self.hands = mp.solutions.hands.Hands(max_num_hands=int(value))
 
     async def update_video(self):
         """Capture video frame and update the label asynchronously"""
