@@ -33,7 +33,7 @@ class WindowUi(customtkinter.CTk):
 
         # MediaPipe Hands
         self.mp_hands = mp.solutions.hands
-        self.hands = self.mp_hands.Hands(min_detection_confidence=0.5, min_tracking_confidence=0.5)
+        self.hands = self.mp_hands.Hands(max_num_hands=1, min_detection_confidence=0.5, min_tracking_confidence=0.5)
         self.mp_drawing = mp.solutions.drawing_utils
 
         # OpenCV Video Capture
@@ -79,10 +79,10 @@ class WindowUi(customtkinter.CTk):
         self.Max_hands_label.grid(row=4, column=0, padx=20, pady=(0, 20))
         # create menu for changing hand detections
         self.Max_hands_optionemenu = customtkinter.CTkOptionMenu(self.sidebar_frame,
-                                                                  values=["1", "2", "3", "4", "5"],
-                                                                  command=self.change_Max_hands)
-        self.Max_hands_optionemenu.grid(row=4, column=0, padx=20, pady=(45, 0))
-        self.Max_hands_optionemenu.grid(row=4, column=0, padx=20, pady=(45, 0))
+                                                                 values=["1", "2", "3", "4", "5"],
+                                                                 command=self.change_Max_hands)
+        self.Max_hands_optionemenu.grid(row=4, column=0, padx=20, pady=(40, 0))
+        self.Max_hands_optionemenu.grid(row=4, column=0, padx=20, pady=(40, 0))
 
         # detection confidence label
         self.detection_label = customtkinter.CTkLabel(self.sidebar_frame, text="Min detection Confidence", anchor="w")
@@ -104,32 +104,52 @@ class WindowUi(customtkinter.CTk):
         self.tracking_optionemenu.grid(row=3, column=0, padx=20, pady=(100, 0))
 
         # create radiobutton frame
-        self.radiobutton_frame = customtkinter.CTkFrame(self)
-        self.radiobutton_frame.grid(row=0, column=3, padx=(20, 20), pady=(20, 0), sticky="nsew")
-        self.radio_var = tkinter.IntVar(value=0)
-        self.label_radio_group = customtkinter.CTkLabel(master=self.radiobutton_frame, text="Hand Tracking Options")
-        self.label_radio_group.grid(row=0, column=2, columnspan=1, padx=10, pady=10, sticky="")
-        self.radio_button_1 = customtkinter.CTkRadioButton(master=self.radiobutton_frame, variable=self.radio_var,
-                                                           value=0, text="Draw Landmarks")
-        self.radio_button_1.grid(row=1, column=2, pady=10, padx=20, sticky="n")
-        self.radio_button_2 = customtkinter.CTkRadioButton(master=self.radiobutton_frame, variable=self.radio_var,
-                                                           value=1)
-        self.radio_button_2.grid(row=2, column=2, pady=10, padx=20, sticky="n")
-        self.radio_button_3 = customtkinter.CTkRadioButton(master=self.radiobutton_frame, variable=self.radio_var,
-                                                           value=2)
-        self.radio_button_3.grid(row=3, column=2, pady=10, padx=20, sticky="n")
+        # self.radiobutton_frame = customtkinter.CTkFrame(self)
+        # self.radiobutton_frame.grid(row=0, column=3, padx=(20, 20), pady=(20, 0), sticky="nsew")
+        # self.radio_var = tkinter.IntVar(value=0)
+        # self.label_radio_group = customtkinter.CTkLabel(master=self.radiobutton_frame, text="Hand Tracking Options")
+        # self.label_radio_group.grid(row=0, column=2, columnspan=1, padx=10, pady=10, sticky="")
+        # self.radio_button_1 = customtkinter.CTkRadioButton(master=self.radiobutton_frame, variable=self.radio_var,
+        #                                                    value=0, text="Draw Landmarks")
+        # self.radio_button_1.grid(row=1, column=2, pady=10, padx=20, sticky="n")
+        # self.radio_button_2 = customtkinter.CTkRadioButton(master=self.radiobutton_frame, variable=self.radio_var,
+        #                                                    value=1)
+        # self.radio_button_2.grid(row=2, column=2, pady=10, padx=20, sticky="n")
+        # self.radio_button_3 = customtkinter.CTkRadioButton(master=self.radiobutton_frame, variable=self.radio_var,
+        #                                                    value=2)
+        # self.radio_button_3.grid(row=3, column=2, pady=10, padx=20, sticky="n")
+
+        # create checkbox and switch frame
+        self.checkbox_slider_frame = customtkinter.CTkFrame(self)
+        self.checkbox_slider_frame.grid(row=1, column=3, padx=(20, 20), pady=(20, 0), sticky="nsew")
+        self.checkbox_1 = customtkinter.CTkCheckBox(master=self.checkbox_slider_frame, text="Enable drawing", command=self.enable_disable_drawing)
+        self.checkbox_1.grid(row=1, column=0, pady=(20, 0), padx=20, sticky="n")
+        self.checkbox_2 = customtkinter.CTkCheckBox(master=self.checkbox_slider_frame)
+        self.checkbox_2.grid(row=2, column=0, pady=(20, 0), padx=20, sticky="n")
+        self.checkbox_3 = customtkinter.CTkCheckBox(master=self.checkbox_slider_frame)
+        self.checkbox_3.grid(row=3, column=0, pady=20, padx=20, sticky="n")
 
         # create a terminal like display frame
         self.termina_like_display = customtkinter.CTkTextbox(self, wrap="word", width=100, height=300)
-        self.termina_like_display.grid(row=1, column=1, padx=(20, 0), pady=(20, 0), sticky="nsew")
+        self.termina_like_display.grid(row=1, column=2, padx=(20, 0), pady=(20, 0), sticky="nsew")
         self.termina_like_display.grid_columnconfigure(0, weight=1)
         self.termina_like_display.grid_rowconfigure(4, weight=1)
+
+        # create a terminal like display frame for landmark tracking
+        self.tracking_like_display = customtkinter.CTkTextbox(self, wrap="word", width=100, height=300)
+        self.tracking_like_display.grid(row=1, column=1, padx=(20, 0), pady=(20, 0), sticky="nsew")
+        self.tracking_like_display.grid_columnconfigure(0, weight=1)
+        self.tracking_like_display.grid_rowconfigure(4, weight=1)
 
         # set default values
         self.appearance_mode_optionemenu.set("Dark")
         self.scaling_optionemenu.set("100%")
+        self.detection_optionemenu.set("0.5")
+        self.tracking_optionemenu.set("0.5")
+        self.Max_hands_optionemenu.set("1")
 
         self.is_running = False
+        self.drawing = False
         self.loop = asyncio.new_event_loop()
 
         # Start asyncio loop in a separate thread
@@ -146,6 +166,11 @@ class WindowUi(customtkinter.CTk):
         self.termina_like_display.insert("end", f"{message}\n")
         self.termina_like_display.see("end")  # Auto-scroll to the latest entry
 
+    def log_to_tracking(self, message):
+        """Append tracking landmark details to the terminal-like display"""
+        self.tracking_like_display.insert("end", f"{message}\n")
+        self.tracking_like_display.see("end")  # Auto-scroll to the latest entry
+
     def change_scaling_event(self, new_scaling: str):
         self.log_to_terminal(f"Adjusted Scale Size to {new_scaling}")
         new_scaling_float = int(new_scaling.replace("%", "")) / 100
@@ -159,6 +184,15 @@ class WindowUi(customtkinter.CTk):
     def stop_frame(self):
         self.log_to_terminal(f"Stopped frame processing")
         self.is_running = False
+
+    def enable_disable_drawing(self):
+        """Enable or disable landmark drawing based on checkbox state."""
+        if self.checkbox_1.get():  # Returns True if checked, False otherwise
+            self.drawing = True
+            self.log_to_terminal("Drawing enabled")
+        else:
+            self.drawing = False
+            self.log_to_terminal("Drawing disabled")
 
     def change_appearance_mode_event(self, new_appearance_mode: str):
         self.log_to_terminal(f"Changed Appearance Mode {new_appearance_mode} ")
@@ -198,8 +232,9 @@ class WindowUi(customtkinter.CTk):
                 # Draw MediaPipe landmarks
                 if results.multi_hand_landmarks:
                     for hand_landmarks in results.multi_hand_landmarks:
-                        self.log_to_terminal(f"{hand_landmarks}")
-                        self.mp_drawing.draw_landmarks(rgb_frame, hand_landmarks, self.mp_hands.HAND_CONNECTIONS)
+                        self.log_to_tracking(f"{hand_landmarks}")
+                        if self.drawing:
+                            self.mp_drawing.draw_landmarks(rgb_frame, hand_landmarks, self.mp_hands.HAND_CONNECTIONS)
 
                 # Convert the frame to a Tkinter-compatible image
                 img = Image.fromarray(rgb_frame)
