@@ -76,23 +76,32 @@ class WindowUi(customtkinter.CTk):
 
         # change maximum number of hand to detect
         self.Max_hands_label = customtkinter.CTkLabel(self.sidebar_frame, text="Max No Of Hands:", anchor="w")
-        self.Max_hands_label.grid(row=4, column=0, padx=20, pady=(0, 50))
+        self.Max_hands_label.grid(row=4, column=0, padx=20, pady=(0, 20))
         # create menu for changing hand detections
         self.Max_hands_optionemenu = customtkinter.CTkOptionMenu(self.sidebar_frame,
                                                                   values=["1", "2", "3", "4", "5"],
                                                                   command=self.change_Max_hands)
-        self.Max_hands_optionemenu.grid(row=4, column=0, padx=20, pady=(10, 10))
-        self.Max_hands_optionemenu.grid(row=4, column=0, padx=20, pady=(10, 10))
+        self.Max_hands_optionemenu.grid(row=4, column=0, padx=20, pady=(45, 0))
+        self.Max_hands_optionemenu.grid(row=4, column=0, padx=20, pady=(45, 0))
 
         # detection confidence label
         self.detection_label = customtkinter.CTkLabel(self.sidebar_frame, text="Min detection Confidence", anchor="w")
-        self.detection_label.grid(row=3, column=0, padx=20, pady=(0, 50))
+        self.detection_label.grid(row=3, column=0, padx=20, pady=(0, 65))
         # create menu for changing hand detections
         self.detection_optionemenu = customtkinter.CTkOptionMenu(self.sidebar_frame,
                                                                  values=["0.5", "0.6", "0.7", "0.8", "0.9"],
                                                                  command=self.change_detection_confidence)
-        self.detection_optionemenu.grid(row=3, column=0, padx=20, pady=(10, 10))
-        self.detection_optionemenu.grid(row=3, column=0, padx=20, pady=(10, 10))
+        self.detection_optionemenu.grid(row=3, column=0, padx=20, pady=(10, 30))
+        self.detection_optionemenu.grid(row=3, column=0, padx=20, pady=(10, 30))
+
+        self.tracking_label = customtkinter.CTkLabel(self.sidebar_frame, text="Min Tracking Confidence", anchor="w")
+        self.tracking_label.grid(row=3, column=0, padx=20, pady=(50, 0))
+        # create menu for changing hand detections
+        self.tracking_optionemenu = customtkinter.CTkOptionMenu(self.sidebar_frame,
+                                                                values=["0.5", "0.6", "0.7", "0.8", "0.9"],
+                                                                command=self.change_tracking_confidence)
+        self.tracking_optionemenu.grid(row=3, column=0, padx=20, pady=(100, 0))
+        self.tracking_optionemenu.grid(row=3, column=0, padx=20, pady=(100, 0))
 
         # create radiobutton frame
         self.radiobutton_frame = customtkinter.CTkFrame(self)
@@ -119,7 +128,6 @@ class WindowUi(customtkinter.CTk):
         # set default values
         self.appearance_mode_optionemenu.set("Dark")
         self.scaling_optionemenu.set("100%")
-        self.change_detection_confidence.set("0.5")
 
         self.is_running = False
         self.loop = asyncio.new_event_loop()
@@ -163,8 +171,14 @@ class WindowUi(customtkinter.CTk):
 
     def change_detection_confidence(self, value):
         """ change detection confidence"""
+        self.log_to_terminal(f"Minimum Detection confidence {value}")
         # Reinitialize MediaPipe detection confidence with updated parameters
         self.hands = mp.solutions.hands.Hands(min_detection_confidence=int(value))
+
+    def change_tracking_confidence(self, value):
+        """ change tracking confidence """
+        self.log_to_terminal(f"Tracking confidence {value}")
+        self.hands = mp.solutions.hands.Hands(min_tracking_confidence=int(value))
 
     async def update_video(self):
         """Capture video frame and update the label asynchronously"""
