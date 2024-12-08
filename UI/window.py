@@ -53,8 +53,7 @@ class WindowUi(customtkinter.CTk):
         self.sidebar_button_1.grid(row=1, column=0, padx=20, pady=10)
         self.sidebar_button_2 = customtkinter.CTkButton(self.sidebar_frame, text="Stop", command=self.stop_frame)
         self.sidebar_button_2.grid(row=2, column=0, padx=20, pady=10)
-        self.sidebar_button_3 = customtkinter.CTkButton(self.sidebar_frame, text="Exit", command=self.on_closing)
-        self.sidebar_button_3.grid(row=3, column=0, padx=20, pady=10)
+
         # create menu for changing theme
         self.appearance_mode_label = customtkinter.CTkLabel(self.sidebar_frame, text="Appearance Mode:", anchor="w")
         self.appearance_mode_label.grid(row=5, column=0, padx=20, pady=(10, 0))
@@ -75,24 +74,34 @@ class WindowUi(customtkinter.CTk):
                                                      text_color=("gray10", "#DCE4EE"), text="TRAIN MODEL")
         self.main_button_1.grid(row=5, column=3, padx=10, pady=10, sticky="nsew")
 
-        # change theme color
-        self.theme_mode_label = customtkinter.CTkLabel(self.sidebar_frame, text="Max No Of Hands:", anchor="w")
-        self.theme_mode_label.grid(row=4, column=0, padx=20, pady=(0, 50))
-        # create menu for changing theme
-        self.theme_mode_optionemenu = customtkinter.CTkOptionMenu(self.sidebar_frame,
+        # change maximum number of hand to detect
+        self.Max_hands_label = customtkinter.CTkLabel(self.sidebar_frame, text="Max No Of Hands:", anchor="w")
+        self.Max_hands_label.grid(row=4, column=0, padx=20, pady=(0, 50))
+        # create menu for changing hand detections
+        self.Max_hands_optionemenu = customtkinter.CTkOptionMenu(self.sidebar_frame,
                                                                   values=["1", "2", "3", "4", "5"],
                                                                   command=self.change_Max_hands)
-        self.theme_mode_optionemenu.grid(row=4, column=0, padx=20, pady=(10, 10))
-        self.theme_mode_optionemenu.grid(row=4, column=0, padx=20, pady=(10, 10))
+        self.Max_hands_optionemenu.grid(row=4, column=0, padx=20, pady=(10, 10))
+        self.Max_hands_optionemenu.grid(row=4, column=0, padx=20, pady=(10, 10))
+
+        # detection confidence label
+        self.detection_label = customtkinter.CTkLabel(self.sidebar_frame, text="Min detection Confidence", anchor="w")
+        self.detection_label.grid(row=3, column=0, padx=20, pady=(0, 50))
+        # create menu for changing hand detections
+        self.detection_optionemenu = customtkinter.CTkOptionMenu(self.sidebar_frame,
+                                                                 values=["0.5", "0.6", "0.7", "0.8", "0.9"],
+                                                                 command=self.change_detection_confidence)
+        self.detection_optionemenu.grid(row=3, column=0, padx=20, pady=(10, 10))
+        self.detection_optionemenu.grid(row=3, column=0, padx=20, pady=(10, 10))
 
         # create radiobutton frame
         self.radiobutton_frame = customtkinter.CTkFrame(self)
         self.radiobutton_frame.grid(row=0, column=3, padx=(20, 20), pady=(20, 0), sticky="nsew")
         self.radio_var = tkinter.IntVar(value=0)
-        self.label_radio_group = customtkinter.CTkLabel(master=self.radiobutton_frame, text="CTkRadioButton Group:")
+        self.label_radio_group = customtkinter.CTkLabel(master=self.radiobutton_frame, text="Hand Tracking Options")
         self.label_radio_group.grid(row=0, column=2, columnspan=1, padx=10, pady=10, sticky="")
         self.radio_button_1 = customtkinter.CTkRadioButton(master=self.radiobutton_frame, variable=self.radio_var,
-                                                           value=0)
+                                                           value=0, text="Draw Landmarks")
         self.radio_button_1.grid(row=1, column=2, pady=10, padx=20, sticky="n")
         self.radio_button_2 = customtkinter.CTkRadioButton(master=self.radiobutton_frame, variable=self.radio_var,
                                                            value=1)
@@ -101,23 +110,16 @@ class WindowUi(customtkinter.CTk):
                                                            value=2)
         self.radio_button_3.grid(row=3, column=2, pady=10, padx=20, sticky="n")
 
-        # create slider and progressbar frame
-        self.slider_progressbar_frame = customtkinter.CTkFrame(self, fg_color="transparent")
-        self.slider_progressbar_frame.grid(row=1, column=1, padx=(20, 0), pady=(20, 0), sticky="nsew")
-        self.slider_progressbar_frame.grid_columnconfigure(0, weight=1)
-        self.slider_progressbar_frame.grid_rowconfigure(4, weight=1)
-        self.seg_button_1 = customtkinter.CTkSegmentedButton(self.slider_progressbar_frame)
-        self.seg_button_1.grid(row=0, column=0, padx=(20, 10), pady=(10, 10), sticky="ew")
-        self.progressbar_1 = customtkinter.CTkProgressBar(self.slider_progressbar_frame)
-        self.progressbar_1.grid(row=1, column=0, padx=(20, 10), pady=(10, 10), sticky="ew")
-        self.progressbar_2 = customtkinter.CTkProgressBar(self.slider_progressbar_frame)
-        self.progressbar_2.grid(row=2, column=0, padx=(20, 10), pady=(10, 10), sticky="ew")
-        self.slider_1 = customtkinter.CTkSlider(self.slider_progressbar_frame, from_=0, to=1, number_of_steps=4)
-        self.slider_1.grid(row=3, column=0, padx=(20, 10), pady=(10, 10), sticky="ew")
+        # create a terminal like display frame
+        self.termina_like_display = customtkinter.CTkTextbox(self, wrap="word", width=100, height=300)
+        self.termina_like_display.grid(row=1, column=1, padx=(20, 0), pady=(20, 0), sticky="nsew")
+        self.termina_like_display.grid_columnconfigure(0, weight=1)
+        self.termina_like_display.grid_rowconfigure(4, weight=1)
 
         # set default values
         self.appearance_mode_optionemenu.set("Dark")
         self.scaling_optionemenu.set("100%")
+        self.change_detection_confidence.set("0.5")
 
         self.is_running = False
         self.loop = asyncio.new_event_loop()
@@ -126,26 +128,43 @@ class WindowUi(customtkinter.CTk):
         threading.Thread(target=self.run_event_loop, daemon=True).start()
 
     def run_event_loop(self):
+        self.log_to_terminal(f"Running event loop")
         asyncio.set_event_loop(self.loop)
         self.loop.run_forever()
+        self.log_to_terminal(f"Success!")
+
+    def log_to_terminal(self, message):
+        """Append a message to the terminal-like display."""
+        self.termina_like_display.insert("end", f"{message}\n")
+        self.termina_like_display.see("end")  # Auto-scroll to the latest entry
 
     def change_scaling_event(self, new_scaling: str):
+        self.log_to_terminal(f"Adjusted Scale Size to {new_scaling}")
         new_scaling_float = int(new_scaling.replace("%", "")) / 100
         customtkinter.set_widget_scaling(new_scaling_float)
 
     def start_frame(self):
+        self.log_to_terminal(f"Started Capture and Processing")
         self.is_running = True
         asyncio.run_coroutine_threadsafe(self.update_video(), self.loop)
 
     def stop_frame(self):
+        self.log_to_terminal(f"Stopped frame processing")
         self.is_running = False
 
     def change_appearance_mode_event(self, new_appearance_mode: str):
+        self.log_to_terminal(f"Changed Appearance Mode {new_appearance_mode} ")
         customtkinter.set_appearance_mode(new_appearance_mode)
 
     def change_Max_hands(self, value):
+        self.log_to_terminal(f"Detecting {value} hand(s)")
         # Reinitialize MediaPipe Hands with updated parameters
         self.hands = mp.solutions.hands.Hands(max_num_hands=int(value))
+
+    def change_detection_confidence(self, value):
+        """ change detection confidence"""
+        # Reinitialize MediaPipe detection confidence with updated parameters
+        self.hands = mp.solutions.hands.Hands(min_detection_confidence=int(value))
 
     async def update_video(self):
         """Capture video frame and update the label asynchronously"""
@@ -165,6 +184,7 @@ class WindowUi(customtkinter.CTk):
                 # Draw MediaPipe landmarks
                 if results.multi_hand_landmarks:
                     for hand_landmarks in results.multi_hand_landmarks:
+                        self.log_to_terminal(f"{hand_landmarks}")
                         self.mp_drawing.draw_landmarks(rgb_frame, hand_landmarks, self.mp_hands.HAND_CONNECTIONS)
 
                 # Convert the frame to a Tkinter-compatible image
