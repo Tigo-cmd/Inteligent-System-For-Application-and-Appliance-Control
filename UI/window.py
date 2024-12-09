@@ -3,6 +3,7 @@
 Graphic user interface implementation for Application with asynchronous video processing.
 
 """
+
 import tkinter
 import customtkinter
 import mediapipe as mp
@@ -10,9 +11,19 @@ from PIL import Image, ImageTk
 import cv2
 import asyncio
 import threading
+from HelperFunctions import CvFpsCalc
+from model import KeyPointClassifier
+from model import PointHistoryClassifier
+
+import csv
+import copy
+import itertools
+from collections import Counter
+from collections import deque
+import numpy as np
 
 customtkinter.set_appearance_mode("System")  # sets theme mode default: system, dark, light
-customtkinter.set_default_color_theme("dark-blue")  # Themes: "blue" (standard), "green", "dark-blue")
+customtkinter.set_default_color_theme("blue")  # Themes: "blue" (standard), "green", "dark-blue")
 
 
 class WindowUi(customtkinter.CTk):
@@ -30,6 +41,38 @@ class WindowUi(customtkinter.CTk):
         self.grid_columnconfigure(1, weight=1)
         self.grid_columnconfigure((2, 3), weight=1)
         self.grid_rowconfigure((0, 1, 2), weight=1)
+
+        # # keypoint and point classifiers
+        # self.keypoint_classifier = KeyPointClassifier()
+        # self.point_history_classifier = PointHistoryClassifier()
+        #
+        # # Read labels basically csv files ###########################################################
+        # with open('model/keypoint_classifier/keypoint_classifier_label.csv',
+        #           encoding='utf-8-sig') as f:
+        #     self.keypoint_classifier_labels = csv.reader(f)
+        #     self.keypoint_classifier_labels = [
+        #         row[0] for row in self.keypoint_classifier_labels
+        #     ]
+        # with open(
+        #         'model/point_history_classifier/point_history_classifier_label.csv',
+        #         encoding='utf-8-sig') as f:
+        #     self.point_history_classifier_labels = csv.reader(f)
+        #     self.point_history_classifier_labels = [
+        #         row[0] for row in self.point_history_classifier_labels
+        #     ]
+        #
+        # # FPS Measurement ########################################################
+        # self.cvFpsCalc = CvFpsCalc(buffer_len=10)
+        #
+        # # Coordinate history #################################################################
+        # self.history_length = 16
+        # self.point_history = deque(maxlen=self.history_length)
+        #
+        # # Finger gesture history ################################################
+        # self.finger_gesture_history = deque(maxlen=self.history_length)
+        #
+        # # mode initializer ########################################################################
+        self.mode = 0
 
         # MediaPipe Hands
         self.mp_hands = mp.solutions.hands
@@ -103,28 +146,47 @@ class WindowUi(customtkinter.CTk):
         self.tracking_optionemenu.grid(row=3, column=0, padx=20, pady=(100, 0))
         self.tracking_optionemenu.grid(row=3, column=0, padx=20, pady=(100, 0))
 
+        # gesture ID selector
+        self.gesture_label = customtkinter.CTkLabel(self.sidebar_frame, text="Gesture ID", anchor="w")
+        self.gesture_label.grid(row=4, column=0, padx=20, pady=(100, 0))
+        # create menu for changing hand detections
+        self.gesture_optionemenu = customtkinter.CTkOptionMenu(self.sidebar_frame,
+                                                               values=["0", "1", "2", "3", "4", "5", "6", "7", "8",
+                                                                       "9"],
+                                                               command=self.change_gesture_id)
+        self.gesture_optionemenu.grid(row=4, column=0, padx=50, pady=(150, 0))
+        self.gesture_optionemenu.grid(row=4, column=0, padx=50, pady=(150, 0))
+
         # create radiobutton frame
-        # self.radiobutton_frame = customtkinter.CTkFrame(self)
-        # self.radiobutton_frame.grid(row=0, column=3, padx=(20, 20), pady=(20, 0), sticky="nsew")
-        # self.radio_var = tkinter.IntVar(value=0)
-        # self.label_radio_group = customtkinter.CTkLabel(master=self.radiobutton_frame, text="Hand Tracking Options")
-        # self.label_radio_group.grid(row=0, column=2, columnspan=1, padx=10, pady=10, sticky="")
-        # self.radio_button_1 = customtkinter.CTkRadioButton(master=self.radiobutton_frame, variable=self.radio_var,
-        #                                                    value=0, text="Draw Landmarks")
-        # self.radio_button_1.grid(row=1, column=2, pady=10, padx=20, sticky="n")
-        # self.radio_button_2 = customtkinter.CTkRadioButton(master=self.radiobutton_frame, variable=self.radio_var,
-        #                                                    value=1)
-        # self.radio_button_2.grid(row=2, column=2, pady=10, padx=20, sticky="n")
-        # self.radio_button_3 = customtkinter.CTkRadioButton(master=self.radiobutton_frame, variable=self.radio_var,
-        #                                                    value=2)
-        # self.radio_button_3.grid(row=3, column=2, pady=10, padx=20, sticky="n")
+        self.radiobutton_frame = customtkinter.CTkFrame(self)
+        self.radiobutton_frame.grid(row=0, column=3, padx=(20, 20), pady=(20, 0), sticky="nsew")
+        self.radio_var = tkinter.IntVar(value=0)
+        self.label_radio_group = customtkinter.CTkLabel(master=self.radiobutton_frame, text="Data Recording Mode")
+        self.label_radio_group.grid(row=0, column=2, columnspan=1, padx=10, pady=10, sticky="")
+        self.radio_button_1 = customtkinter.CTkRadioButton(master=self.radiobutton_frame, variable=self.radio_var,
+                                                           value=1, text="Static Gesture Mode   ",
+                                                           command=self.mode_selector)
+        self.radio_button_1.grid(row=3, column=2, pady=10, padx=20, sticky="n")
+        self.radio_button_2 = customtkinter.CTkRadioButton(master=self.radiobutton_frame, variable=self.radio_var,
+                                                           value=2, text="Dynamic Gesture Mode",
+                                                           command=self.mode_selector)
+        self.radio_button_2.grid(row=2, column=2, pady=10, padx=20, sticky="n")
+        self.radio_button_3 = customtkinter.CTkRadioButton(master=self.radiobutton_frame, variable=self.radio_var,
+                                                           value=0, text="Normal Gesture Mode   ",
+                                                           command=self.mode_selector)
+        self.radio_button_3.grid(row=1, column=2, pady=10, padx=20, sticky="n")
+
+        self.numberbutton_frame = customtkinter.CTkFrame(self)
+        self.numberbutton_frame.grid(row=0, column=4, padx=(20, 20), pady=(20, 0), sticky="nsew")
+        self.number_var = tkinter.IntVar(value=0)
 
         # create checkbox and switch frame
         self.checkbox_slider_frame = customtkinter.CTkFrame(self)
         self.checkbox_slider_frame.grid(row=1, column=3, padx=(20, 20), pady=(20, 0), sticky="nsew")
-        self.checkbox_1 = customtkinter.CTkCheckBox(master=self.checkbox_slider_frame, text="Enable drawing", command=self.enable_disable_drawing)
+        self.checkbox_1 = customtkinter.CTkCheckBox(master=self.checkbox_slider_frame, text="Enable drawing",
+                                                    command=self.enable_disable_drawing)
         self.checkbox_1.grid(row=1, column=0, pady=(20, 0), padx=20, sticky="n")
-        self.checkbox_2 = customtkinter.CTkCheckBox(master=self.checkbox_slider_frame)
+        self.checkbox_2 = customtkinter.CTkCheckBox(master=self.checkbox_slider_frame, text="Show FPS")
         self.checkbox_2.grid(row=2, column=0, pady=(20, 0), padx=20, sticky="n")
         self.checkbox_3 = customtkinter.CTkCheckBox(master=self.checkbox_slider_frame)
         self.checkbox_3.grid(row=3, column=0, pady=20, padx=20, sticky="n")
@@ -147,6 +209,7 @@ class WindowUi(customtkinter.CTk):
         self.detection_optionemenu.set("0.5")
         self.tracking_optionemenu.set("0.5")
         self.Max_hands_optionemenu.set("1")
+        self.gesture_optionemenu.set("0")
 
         self.is_running = False
         self.drawing = False
@@ -165,6 +228,23 @@ class WindowUi(customtkinter.CTk):
         """Append a message to the terminal-like display."""
         self.termina_like_display.insert("end", f"{message}\n")
         self.termina_like_display.see("end")  # Auto-scroll to the latest entry
+
+    def change_gesture_id(self, value):
+        """change Gesture Id for Classifications"""
+        self.log_to_terminal(f"{value} ID selected")
+
+    def mode_selector(self):
+        """handler function for mode selection"""
+        selected = self.radio_var.get()
+        if selected == 0:
+            self.log_to_terminal("Normal Mode selected.")
+            self.mode = 0
+        elif selected == 1:
+            self.log_to_terminal("Static Gesture Mode selected.")
+            self.mode = 1
+        elif selected == 2:
+            self.log_to_terminal("Dynamic Gesture Mode selected.")
+            self.mode = 2
 
     def log_to_tracking(self, message):
         """Append tracking landmark details to the terminal-like display"""
