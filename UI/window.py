@@ -1,26 +1,8 @@
 #!/usr/bin/env python3
-"""
-Graphic user interface implementation for Application with asynchronous video processing.
 
-"""
 
-import tkinter
-import customtkinter
-import mediapipe as mp
-from PIL import Image, ImageTk
-import cv2
-import asyncio
-import threading
-from HelperFunctions import CvFpsCalc
-from model import KeyPointClassifier
-from model import PointHistoryClassifier
 
-import csv
-import copy
-import itertools
-from collections import Counter
-from collections import deque
-import numpy as np
+
 
 customtkinter.set_appearance_mode("System")  # sets theme mode default: system, dark, light
 customtkinter.set_default_color_theme("blue")  # Themes: "blue" (standard), "green", "dark-blue")
@@ -30,6 +12,8 @@ class WindowUi(customtkinter.CTk):
     """
     Main User Gesture interface that inherits from customtkinter
     """
+
+    prev_action = None
 
     def __init__(self):
         """Initializer at first call"""
@@ -42,35 +26,35 @@ class WindowUi(customtkinter.CTk):
         self.grid_columnconfigure((2, 3), weight=1)
         self.grid_rowconfigure((0, 1, 2), weight=1)
 
-        # # keypoint and point classifiers
-        # self.keypoint_classifier = KeyPointClassifier()
-        # self.point_history_classifier = PointHistoryClassifier()
-        #
-        # # Read labels basically csv files ###########################################################
-        # with open('model/keypoint_classifier/keypoint_classifier_label.csv',
-        #           encoding='utf-8-sig') as f:
-        #     self.keypoint_classifier_labels = csv.reader(f)
-        #     self.keypoint_classifier_labels = [
-        #         row[0] for row in self.keypoint_classifier_labels
-        #     ]
-        # with open(
-        #         'model/point_history_classifier/point_history_classifier_label.csv',
-        #         encoding='utf-8-sig') as f:
-        #     self.point_history_classifier_labels = csv.reader(f)
-        #     self.point_history_classifier_labels = [
-        #         row[0] for row in self.point_history_classifier_labels
-        #     ]
-        #
-        # # FPS Measurement ########################################################
-        # self.cvFpsCalc = CvFpsCalc(buffer_len=10)
-        #
-        # # Coordinate history #################################################################
-        # self.history_length = 16
-        # self.point_history = deque(maxlen=self.history_length)
-        #
-        # # Finger gesture history ################################################
-        # self.finger_gesture_history = deque(maxlen=self.history_length)
-        #
+        # keypoint and point classifiers
+        self.keypoint_classifier = KeyPointClassifier()
+        self.point_history_classifier = PointHistoryClassifier()
+
+        # Read labels basically csv files ###########################################################
+        with open('model/keypoint_classifier/keypoint_classifier_label.csv',
+                  encoding='utf-8-sig') as f:
+            self.keypoint_classifier_labels = csv.reader(f)
+            self.keypoint_classifier_labels = [
+                row[0] for row in self.keypoint_classifier_labels
+            ]
+        with open(
+                'model/point_history_classifier/point_history_classifier_label.csv',
+                encoding='utf-8-sig') as f:
+            self.point_history_classifier_labels = csv.reader(f)
+            self.point_history_classifier_labels = [
+                row[0] for row in self.point_history_classifier_labels
+            ]
+
+        # FPS Measurement ########################################################
+        self.cvFpsCalc = CvFpsCalc(buffer_len=10)
+
+        # Coordinate history #################################################################
+        self.history_length = 16
+        self.point_history = deque(maxlen=self.history_length)
+
+        # Finger gesture history ################################################
+        self.finger_gesture_history = deque(maxlen=self.history_length)
+
         # # mode initializer ########################################################################
         self.mode = 0
 
@@ -315,6 +299,56 @@ class WindowUi(customtkinter.CTk):
                         self.log_to_tracking(f"{hand_landmarks}")
                         if self.drawing:
                             self.mp_drawing.draw_landmarks(rgb_frame, hand_landmarks, self.mp_hands.HAND_CONNECTIONS)
+                            # Bounding box calculation
+                            brect = calc_bounding_rect(self.frame, hand_landmarks)
+                            # Landmark calculation
+                            landmark_list = calc_landmark_list(frame, hand_landmarks)
+
+                            # print(landmark_list[0])
+
+                            # Conversion to relative coordinates / normalized coordinates
+                            pre_processed_landmark_list = pre_process_landmark(
+                                landmark_list)
+                            pre_processed_point_history_list = pre_process_point_history(
+                                frame, self.point_history)
+                            # Write to the dataset file
+                            logging_csv(self.number, self.mode, pre_processed_landmark_list,
+                                        pre_processed_point_history_list)
+
+                            # Hand sign classification
+                            hand_sign_id = self.keypoint_classifier(pre_processed_landmark_list)
+                            if hand_sign_id == 2:  # Point gesture
+                                self.point_history.append(landmark_list[8])
+                            else:
+                                self.point_history.append([0, 0])
+
+                            # Finger gesture classification
+                            finger_gesture_id = 0
+                            point_history_len = len(pre_processed_point_history_list)
+                            if point_history_len == (self.history_length * 2):
+                                finger_gesture_id = self.point_history_classifier(
+                                    pre_processed_point_history_list)
+
+                            # Calculates the gesture IDs in the latest detection
+                            self.finger_gesture_history.append(finger_gesture_id)
+                            most_common_fg_id = Counter(
+                                self.finger_gesture_history).most_common()
+
+                            # # Drawing part
+                            # frame = draw_bounding_rect(use_brect, debug_image, brect)
+                            # frame = draw_landmarks(debug_image, landmark_list)
+                            # frame = draw_info_text(
+                            #     frame,
+                            #     brect,
+                            #     handedness,
+                            #     keypoint_classifier_labels[hand_sign_id],
+                            #     point_history_classifier_labels[most_common_fg_id[0][0]],
+                            # )
+                        else:
+                            self.point_history.append([0, 0])
+                        #
+                        debug_image = draw_point_history(frame, self.point_history)
+                        debug_image = draw_info(debug_image, self.fps, self.mode, self.number)
 
                 # Convert the frame to a Tkinter-compatible image
                 img = Image.fromarray(rgb_frame)
