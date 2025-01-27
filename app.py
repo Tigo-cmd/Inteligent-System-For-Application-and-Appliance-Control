@@ -12,6 +12,7 @@ from collections import Counter
 from collections import deque
 import tkinter
 import customtkinter
+import cv2
 from PIL import Image, ImageTk
 # import cv2
 import asyncio
@@ -75,6 +76,13 @@ class WindowUi(customtkinter.CTk):
         self.sidebar_button_2.grid(row=2, column=0, padx=20, pady=10)
 
         # menu for seting appearance mode for light to dark and vice versa
+        # create menu for changing theme
+        self.appearance_mode_label = customtkinter.CTkLabel(self.sidebar_frame, text="Appearance Mode:", anchor="w")
+        self.appearance_mode_label.grid(row=5, column=0, padx=20, pady=(10, 0))
+        # create menu for changing theme
+        self.appearance_mode_optionemenu = customtkinter.CTkOptionMenu(self.sidebar_frame,
+                                                                       values=["Light", "Dark", "System"],
+                                                                       command=self.change_appearance_mode_event)
 
         self.appearance_mode_optionemenu.grid(row=6, column=0, padx=20, pady=(10, 10))
         self.appearance_mode_optionemenu.grid(row=6, column=0, padx=20, pady=(10, 10))
@@ -236,7 +244,8 @@ class WindowUi(customtkinter.CTk):
         # mode = 0
 
         while self.is_running:
-            while True:
+            ret, image = await asyncio.to_thread(self.cap.read)
+            if ret:
                 fps = cvFpsCalc.get()
 
                 # Process Key (ESC: end) #################################################
@@ -250,19 +259,21 @@ class WindowUi(customtkinter.CTk):
                 if not ret:
                     break
                 image = cv.flip(image, 1)  # Mirror display
+                image = cv2.resize(image, (500, 400))
                 debug_image = copy.deepcopy(image)
 
                 # Detection implementation #############################################################
                 image = cv.cvtColor(image, cv.COLOR_BGR2RGB)
 
                 image.flags.writeable = False
-                results = self.hands.process(image)
+                results = await asyncio.to_thread(self.hands.process, image)
                 image.flags.writeable = True
 
                 #  ####################################################################
                 if results.multi_hand_landmarks is not None:
                     for hand_landmarks, handedness in zip(results.multi_hand_landmarks,
                                                           results.multi_handedness):
+                        self.log_to_tracking(f"{hand_landmarks}")
                         # Bounding box calculation
                         brect = calc_bounding_rect(debug_image, hand_landmarks)
                         # Landmark calculation
@@ -296,16 +307,17 @@ class WindowUi(customtkinter.CTk):
                         most_common_fg_id = Counter(
                             finger_gesture_history).most_common()
 
-                        # Drawing part
-                        debug_image = draw_bounding_rect(use_brect, debug_image, brect)
-                        debug_image = draw_landmarks(debug_image, landmark_list)
-                        debug_image = draw_info_text(
-                            debug_image,
-                            brect,
-                            handedness,
-                            keypoint_classifier_labels[hand_sign_id],
-                            point_history_classifier_labels[most_common_fg_id[0][0]],
-                        )
+                        if self.drawing:
+                            # Drawing part
+                            debug_image = draw_bounding_rect(use_brect, debug_image, brect)
+                            debug_image = draw_landmarks(debug_image, landmark_list)
+                            debug_image = draw_info_text(
+                                debug_image,
+                                brect,
+                                handedness,
+                                keypoint_classifier_labels[hand_sign_id],
+                                point_history_classifier_labels[most_common_fg_id[0][0]],
+                            )
                 else:
                     point_history.append([0, 0])
 
@@ -313,15 +325,29 @@ class WindowUi(customtkinter.CTk):
                 debug_image = draw_info(debug_image, fps, mode, number)
 
                 # Screen reflection #############################################################
-                cv.imshow('Hand Gesture Recognition', debug_image)
+                cv.imshow('Application and Appliance Control System', debug_image)
 
-        self.cap.release()
-        cv.destroyAllWindows()
+                # Convert the frame to a Tkinter-compatible image
+                img = Image.fromarray(image)
+                imgtk = ImageTk.PhotoImage(image=img)
+
+                # Update the GUI in the main thread
+                self.video_label.imgtk = imgtk
+                self.video_label.configure(image=imgtk)
+
+            await asyncio.sleep(0.01)  # Small delay to prevent overloading the event loop
+
+        # self.cap.release()
+        # cv.destroyAllWindows()
 
     def start_frame(self):
         self.log_to_terminal(f"Started Capture and Processing")
         self.is_running = True
         asyncio.run_coroutine_threadsafe(self.update_video(), self.loop)
+
+    def change_gesture_id(self, value):
+        """change Gesture Id for Classifications"""
+        self.log_to_terminal(f"{value} ID selected")
 
     # stops the frame
     def stop_frame(self):
@@ -334,6 +360,10 @@ class WindowUi(customtkinter.CTk):
         asyncio.set_event_loop(self.loop)
         self.loop.run_forever()
         self.log_to_terminal(f"Success!")
+
+    def change_appearance_mode_event(self, new_appearance_mode: str):
+        self.log_to_terminal(f"Changed Appearance Mode {new_appearance_mode} ")
+        customtkinter.set_appearance_mode(new_appearance_mode)
 
     # log messages to terminal
     def log_to_terminal(self, message):
@@ -402,6 +432,13 @@ class WindowUi(customtkinter.CTk):
         if key == 104:  # h
             mode = 2
         return number, mode
+
+    def on_closing(self):
+        """Handle application closing"""
+        self.is_running = False
+        self.cap.release()  # Release the camera
+        self.loop.stop()  # Stop asyncio loop
+        self.destroy()  # Close the window
 
 
 def calc_bounding_rect(image, landmarks):
@@ -750,4 +787,6 @@ def draw_info(image, fps, mode, number):
 
 
 if __name__ == '__main__':
-    main()
+    app = WindowUi()
+    app.protocol("WM_DELETE_WINDOW", app.on_closing)  # Ensure camera is released on close
+    app.mainloop()
