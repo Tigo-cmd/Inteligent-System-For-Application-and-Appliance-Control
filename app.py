@@ -175,7 +175,8 @@ class WindowUi(customtkinter.CTk):
         self.checkbox_1 = customtkinter.CTkCheckBox(master=self.checkbox_slider_frame, text="Enable drawing",
                                                     command=self.enable_disable_drawing)
         self.checkbox_1.grid(row=1, column=0, pady=(20, 0), padx=20, sticky="n")
-        self.checkbox_2 = customtkinter.CTkCheckBox(master=self.checkbox_slider_frame, text="Show FPS")
+        self.checkbox_2 = customtkinter.CTkCheckBox(master=self.checkbox_slider_frame, text="Show FPS",
+                                                    command=self.show_fps)
         self.checkbox_2.grid(row=2, column=0, pady=(20, 0), padx=20, sticky="n")
         self.checkbox_3 = customtkinter.CTkCheckBox(master=self.checkbox_slider_frame)
         self.checkbox_3.grid(row=3, column=0, pady=20, padx=20, sticky="n")
@@ -202,6 +203,7 @@ class WindowUi(customtkinter.CTk):
 
         self.is_running = False
         self.drawing = False
+        self.fps = False
         self.loop = asyncio.new_event_loop()
 
         # Start asyncio loop in a separate thread
@@ -322,13 +324,14 @@ class WindowUi(customtkinter.CTk):
                     point_history.append([0, 0])
 
                 debug_image = draw_point_history(debug_image, point_history)
-                debug_image = draw_info(debug_image, fps, mode, number)
+                if self.fps:
+                    debug_image = draw_info(debug_image, fps, mode, number)
 
                 # Screen reflection #############################################################
-                cv.imshow('Application and Appliance Control System', debug_image)
+                # cv.imshow('Application and Appliance Control System', debug_image)
 
                 # Convert the frame to a Tkinter-compatible image
-                img = Image.fromarray(image)
+                img = Image.fromarray(debug_image)
                 imgtk = ImageTk.PhotoImage(image=img)
 
                 # Update the GUI in the main thread
@@ -382,6 +385,17 @@ class WindowUi(customtkinter.CTk):
         self.log_to_terminal(f"Adjusted Scale Size to {new_scaling}")
         new_scaling_float = int(new_scaling.replace("%", "")) / 100
         customtkinter.set_widget_scaling(new_scaling_float)
+
+    def show_fps(self):
+        """
+        this shows the fps when user enables it
+        """
+        if self.checkbox_2.get():  # Returns True if checked, False otherwise
+            self.fps = True
+            self.log_to_terminal(" enabled FPS")
+        else:
+            self.fps = False
+            self.log_to_terminal("disabled FPS")
 
     def enable_disable_drawing(self):
         """Enable or disable landmark drawing based on checkbox state."""
