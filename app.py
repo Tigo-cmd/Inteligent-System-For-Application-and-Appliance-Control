@@ -6,7 +6,6 @@ Graphic user interface implementation for Application with asynchronous video pr
 """
 import csv
 import copy
-import argparse
 import itertools
 from collections import Counter
 from collections import deque
@@ -14,7 +13,6 @@ import tkinter
 import customtkinter
 import cv2
 from PIL import Image, ImageTk
-# import cv2
 import asyncio
 import threading
 import pyautogui
@@ -51,6 +49,7 @@ class WindowUi(customtkinter.CTk):
 
         # # mode initializer ########################################################################
         self.mode = 0
+        self.number = None
 
         # MediaPipe Hands
         self.mp_hands = mp.solutions.hands
@@ -103,7 +102,8 @@ class WindowUi(customtkinter.CTk):
         self.scaling_optionemenu.grid(row=8, column=0, padx=20, pady=(10, 20))
 
         self.main_button_1 = customtkinter.CTkButton(master=self, fg_color="transparent", border_width=2,
-                                                     text_color=("gray10", "#DCE4EE"), text="TRAIN MODEL")
+                                                     text_color=("gray10", "#DCE4EE"), text="TRAIN MODEL",
+                                                     command=self.train_model)
         self.main_button_1.grid(row=5, column=3, padx=10, pady=10, sticky="nsew")
 
         # change maximum number of hand to detect
@@ -165,9 +165,9 @@ class WindowUi(customtkinter.CTk):
                                                            command=self.mode_selector)
         self.radio_button_3.grid(row=1, column=2, pady=10, padx=20, sticky="n")
 
-        self.numberbutton_frame = customtkinter.CTkFrame(self)
-        self.numberbutton_frame.grid(row=0, column=4, padx=(20, 20), pady=(20, 0), sticky="nsew")
-        self.number_var = tkinter.IntVar(value=0)
+        # self.numberbutton_frame = customtkinter.CTkFrame(self)
+        # self.numberbutton_frame.grid(row=0, column=4, padx=(20, 20), pady=(20, 0), sticky="nsew")
+        # self.number_var = tkinter.IntVar(value=0)
 
         # create checkbox and switch frame
         self.checkbox_slider_frame = customtkinter.CTkFrame(self)
@@ -254,7 +254,7 @@ class WindowUi(customtkinter.CTk):
                 key = cv.waitKey(10)
                 if key == 27:  # ESC
                     break
-                number, mode = self.select_mode(key, self.mode)
+                # self.number, self.mode = self.select_mode(key, self.mode)
 
                 # Camera capture #####################################################
                 ret, image = self.cap.read()
@@ -262,10 +262,10 @@ class WindowUi(customtkinter.CTk):
                     break
                 image = cv.flip(image, 1)  # Mirror display
                 image = cv2.resize(image, (500, 400))
-                debug_image = copy.deepcopy(image)
 
                 # Detection implementation #############################################################
                 image = cv.cvtColor(image, cv.COLOR_BGR2RGB)
+                debug_image = copy.deepcopy(image)
 
                 image.flags.writeable = False
                 results = await asyncio.to_thread(self.hands.process, image)
@@ -287,8 +287,10 @@ class WindowUi(customtkinter.CTk):
                         pre_processed_point_history_list = pre_process_point_history(
                             debug_image, point_history)
                         # Write to the dataset file
-                        logging_csv(number, mode, pre_processed_landmark_list,
+                        logging_csv(self.number, self.mode, pre_processed_landmark_list,
                                     pre_processed_point_history_list)
+                        self.log_to_tracking(f"{self.number}, {self.mode}, {pre_processed_landmark_list}, "
+                                             f"{pre_processed_point_history_list}")
 
                         # Hand sign classification
                         hand_sign_id = keypoint_classifier(pre_processed_landmark_list)
@@ -325,7 +327,7 @@ class WindowUi(customtkinter.CTk):
 
                 debug_image = draw_point_history(debug_image, point_history)
                 if self.fps:
-                    debug_image = draw_info(debug_image, fps, mode, number)
+                    debug_image = draw_info(debug_image, fps, self.mode, self.number)
 
                 # Screen reflection #############################################################
                 # cv.imshow('Application and Appliance Control System', debug_image)
@@ -351,6 +353,12 @@ class WindowUi(customtkinter.CTk):
     def change_gesture_id(self, value):
         """change Gesture Id for Classifications"""
         self.log_to_terminal(f"{value} ID selected")
+        self.number = int(value)
+
+    def train_model(self):
+        """strikes the numbers gotten from self  numbers and press repeatedly to log to csv """
+        pyautogui.press(str(self.number))
+        self.log_to_terminal(f"Training gesture to id {self.number}")
 
     # stops the frame
     def stop_frame(self):
@@ -435,17 +443,17 @@ class WindowUi(customtkinter.CTk):
             self.log_to_terminal("Dynamic Gesture Mode selected.")
             self.mode = 2
 
-    def select_mode(self, key, mode):
-        number = -1
-        if 48 <= key <= 57:  # 0 ~ 9
-            number = key - 48
-        if key == 110:  # n
-            mode = 0
-        if key == 107:  # k
-            mode = 1
-        if key == 104:  # h
-            mode = 2
-        return number, mode
+    # def select_mode(self, key, mode):
+    #     number = -1
+    #     if 48 <= key <= 57:  # 0 ~ 9
+    #         number = key - 48
+    #     if key == 110:  # n
+    #         self.mode = 0
+    #     if key == 107:  # k
+    #         self.mode = 1
+    #     if key == 104:  # h
+    #         self.mode = 2
+    #     return number, mode
 
     def on_closing(self):
         """Handle application closing"""
@@ -761,7 +769,7 @@ def draw_info_text(image, brect, handedness, hand_sign_text,
     if hand_sign_text != "":
         info_text = info_text + ':' + hand_sign_text
     cv.putText(image, info_text, (brect[0] + 5, brect[1] - 4),
-               cv.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1, cv.LINE_AA)
+               cv.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 1, cv.LINE_AA)
 
     if finger_gesture_text != "":
         cv.putText(image, "Finger Gesture:" + finger_gesture_text, (10, 60),
@@ -786,16 +794,16 @@ def draw_info(image, fps, mode, number):
     cv.putText(image, "FPS:" + str(fps), (10, 30), cv.FONT_HERSHEY_SIMPLEX,
                1.0, (0, 0, 0), 4, cv.LINE_AA)
     cv.putText(image, "FPS:" + str(fps), (10, 30), cv.FONT_HERSHEY_SIMPLEX,
-               1.0, (255, 255, 255), 2, cv.LINE_AA)
+               1.0, (255, 0, 5), 2, cv.LINE_AA)
 
     mode_string = ['Logging Key Point', 'Logging Point History']
     if 1 <= mode <= 2:
         cv.putText(image, "MODE:" + mode_string[mode - 1], (10, 90),
-                   cv.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1,
+                   cv.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 1,
                    cv.LINE_AA)
         if 0 <= number <= 9:
             cv.putText(image, "NUM:" + str(number), (10, 110),
-                       cv.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1,
+                       cv.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 255), 1,
                        cv.LINE_AA)
     return image
 
