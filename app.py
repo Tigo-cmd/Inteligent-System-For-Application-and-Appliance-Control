@@ -26,170 +26,324 @@ from utils import CvFpsCalc
 from model import KeyPointClassifier
 from model import PointHistoryClassifier
 
-
-def get_args():
-    parser = argparse.ArgumentParser()
-
-    parser.add_argument("--device", type=int, default=0)
-    parser.add_argument("--width", help='cap width', type=int, default=960)
-    parser.add_argument("--height", help='cap height', type=int, default=540)
-
-    parser.add_argument('--use_static_image_mode', action='store_true')
-    parser.add_argument("--min_detection_confidence",
-                        help='min_detection_confidence',
-                        type=float,
-                        default=0.7)
-    parser.add_argument("--min_tracking_confidence",
-                        help='min_tracking_confidence',
-                        type=int,
-                        default=0.5)
-
-    args = parser.parse_args()
-
-    return args
+customtkinter.set_appearance_mode("System")  # sets theme mode default: system, dark, light
+customtkinter.set_default_color_theme("blue")  # Themes: "blue" (standard), "green", "dark-blue")
 
 
-def main():
-    # Argument parsing #################################################################
-    args = get_args()
+class WindowUi(customtkinter.CTk):
+    """
+    Main User Gesture interface that inherits from customtkinter
+    """
 
-    cap_device = args.device
-    cap_width = args.width
-    cap_height = args.height
+    prev_action = None
 
-    use_static_image_mode = args.use_static_image_mode
-    min_detection_confidence = args.min_detection_confidence
-    min_tracking_confidence = args.min_tracking_confidence
+    def __init__(self):
+        """Initializer at first call"""
+        super().__init__()
+        self.geometry(f"{1100}x{580}")
+        self.title("Intelligent-System-For-Application-and-Appliance-Control")
 
-    use_brect = True
+        # Grid and responsiveness
+        self.grid_columnconfigure(1, weight=1)
+        self.grid_columnconfigure((2, 3), weight=1)
+        self.grid_rowconfigure((0, 1, 2), weight=1)
 
-    # Camera preparation ###############################################################
-    cap = cv.VideoCapture(cap_device)
-    cap.set(cv.CAP_PROP_FRAME_WIDTH, cap_width)
-    cap.set(cv.CAP_PROP_FRAME_HEIGHT, cap_height)
+        # # mode initializer ########################################################################
+        self.mode = 0
 
-    # Model load #############################################################
-    mp_hands = mp.solutions.hands
-    hands = mp_hands.Hands(
-        static_image_mode=use_static_image_mode,
-        max_num_hands=1,
-        min_detection_confidence=min_detection_confidence,
-        min_tracking_confidence=min_tracking_confidence,
-    )
+        # MediaPipe Hands
+        self.mp_hands = mp.solutions.hands
+        self.hands = self.mp_hands.Hands(max_num_hands=1, min_detection_confidence=0.5, min_tracking_confidence=0.5)
+        self.mp_drawing = mp.solutions.drawing_utils
 
-    keypoint_classifier = KeyPointClassifier()
+        # OpenCV Video Capture
+        self.cap = cv.VideoCapture(0)
 
-    point_history_classifier = PointHistoryClassifier()
+        # Create a Canvas to Display Video
+        self.video_label = customtkinter.CTkLabel(self, text="")
+        self.video_label.grid(row=0, column=1, padx=(2, 0), pady=(5, 0), sticky="nsew")
 
-    # Read labels ###########################################################
-    with open('model/keypoint_classifier/keypoint_classifier_label.csv',
-              encoding='utf-8-sig') as f:
-        keypoint_classifier_labels = csv.reader(f)
-        keypoint_classifier_labels = [
-            row[0] for row in keypoint_classifier_labels
-        ]
-    with open(
-            'model/point_history_classifier/point_history_classifier_label.csv',
-            encoding='utf-8-sig') as f:
-        point_history_classifier_labels = csv.reader(f)
-        point_history_classifier_labels = [
-            row[0] for row in point_history_classifier_labels
-        ]
+        self.sidebar_frame = customtkinter.CTkFrame(self, width=130, corner_radius=0)
+        self.sidebar_frame.grid(row=0, column=0, rowspan=4, sticky="nsew")
+        self.sidebar_frame.grid_rowconfigure(4, weight=1)
+        self.logo_label = customtkinter.CTkLabel(self.sidebar_frame, text="ACTIONS",
+                                                 font=customtkinter.CTkFont(size=20, weight="bold"))
+        self.logo_label.grid(row=0, column=0, padx=20, pady=(20, 10))
+        self.sidebar_button_1 = customtkinter.CTkButton(self.sidebar_frame, text="Start", command=self.start_frame)
+        self.sidebar_button_1.grid(row=1, column=0, padx=20, pady=10)
+        self.sidebar_button_2 = customtkinter.CTkButton(self.sidebar_frame, text="Stop", command=self.stop_frame)
+        self.sidebar_button_2.grid(row=2, column=0, padx=20, pady=10)
 
-    # FPS Measurement ########################################################
-    cvFpsCalc = CvFpsCalc(buffer_len=10)
+        # menu for seting appearance mode for light to dark and vice versa
 
-    # Coordinate history #################################################################
-    history_length = 16
-    point_history = deque(maxlen=history_length)
+        self.appearance_mode_optionemenu.grid(row=6, column=0, padx=20, pady=(10, 10))
+        self.appearance_mode_optionemenu.grid(row=6, column=0, padx=20, pady=(10, 10))
+        self.scaling_label = customtkinter.CTkLabel(self.sidebar_frame, text="UI Scaling:", anchor="w")
+        self.scaling_label.grid(row=7, column=0, padx=20, pady=(10, 0))
+        self.scaling_optionemenu = customtkinter.CTkOptionMenu(self.sidebar_frame,
+                                                               values=["80%", "90%", "100%", "110%", "120%"],
+                                                               command=self.change_scaling_event)
+        use_brect = True
 
-    # Finger gesture history ################################################
-    finger_gesture_history = deque(maxlen=history_length)
+        # create menu for changing theme
+        self.appearance_mode_label = customtkinter.CTkLabel(self.sidebar_frame, text="Appearance Mode:", anchor="w")
+        self.appearance_mode_label.grid(row=5, column=0, padx=20, pady=(10, 0))
+        # create menu for changing theme
+        self.appearance_mode_optionemenu = customtkinter.CTkOptionMenu(self.sidebar_frame,
+                                                                       values=["Light", "Dark", "System"],
+                                                                       command=self.change_appearance_mode_event)
 
-    #  ########################################################################
-    mode = 0
+        self.scaling_optionemenu.grid(row=8, column=0, padx=20, pady=(10, 20))
 
-    while True:
-        fps = cvFpsCalc.get()
+        self.main_button_1 = customtkinter.CTkButton(master=self, fg_color="transparent", border_width=2,
+                                                     text_color=("gray10", "#DCE4EE"), text="TRAIN MODEL")
+        self.main_button_1.grid(row=5, column=3, padx=10, pady=10, sticky="nsew")
 
-        # Process Key (ESC: end) #################################################
-        key = cv.waitKey(10)
-        if key == 27:  # ESC
-            break
-        number, mode = select_mode(key, mode)
+        # change maximum number of hand to detect
+        self.Max_hands_label = customtkinter.CTkLabel(self.sidebar_frame, text="Max No Of Hands:", anchor="w")
+        self.Max_hands_label.grid(row=4, column=0, padx=20, pady=(0, 20))
+        # create menu for changing hand detections
+        self.Max_hands_optionemenu = customtkinter.CTkOptionMenu(self.sidebar_frame,
+                                                                 values=["1", "2", "3", "4", "5"],
+                                                                 command=self.change_Max_hands)
+        self.Max_hands_optionemenu.grid(row=4, column=0, padx=20, pady=(40, 0))
+        self.Max_hands_optionemenu.grid(row=4, column=0, padx=20, pady=(40, 0))
 
-        # Camera capture #####################################################
-        ret, image = cap.read()
-        if not ret:
-            break
-        image = cv.flip(image, 1)  # Mirror display
-        debug_image = copy.deepcopy(image)
+        # detection confidence label
+        self.detection_label = customtkinter.CTkLabel(self.sidebar_frame, text="Min detection Confidence", anchor="w")
+        self.detection_label.grid(row=3, column=0, padx=20, pady=(0, 65))
+        # create menu for changing hand detections
+        self.detection_optionemenu = customtkinter.CTkOptionMenu(self.sidebar_frame,
+                                                                 values=["0.5", "0.6", "0.7", "0.8", "0.9"],
+                                                                 command=self.change_detection_confidence)
+        self.detection_optionemenu.grid(row=3, column=0, padx=20, pady=(10, 30))
+        self.detection_optionemenu.grid(row=3, column=0, padx=20, pady=(10, 30))
 
-        # Detection implementation #############################################################
-        image = cv.cvtColor(image, cv.COLOR_BGR2RGB)
+        self.tracking_label = customtkinter.CTkLabel(self.sidebar_frame, text="Min Tracking Confidence", anchor="w")
+        self.tracking_label.grid(row=3, column=0, padx=20, pady=(50, 0))
+        # create menu for changing hand detections
+        self.tracking_optionemenu = customtkinter.CTkOptionMenu(self.sidebar_frame,
+                                                                values=["0.5", "0.6", "0.7", "0.8", "0.9"],
+                                                                command=self.change_tracking_confidence)
+        self.tracking_optionemenu.grid(row=3, column=0, padx=20, pady=(100, 0))
+        self.tracking_optionemenu.grid(row=3, column=0, padx=20, pady=(100, 0))
 
-        image.flags.writeable = False
-        results = hands.process(image)
-        image.flags.writeable = True
+        # gesture ID selector
+        self.gesture_label = customtkinter.CTkLabel(self.sidebar_frame, text="Gesture ID", anchor="w")
+        self.gesture_label.grid(row=4, column=0, padx=20, pady=(100, 0))
+        # create menu for changing hand detections
+        self.gesture_optionemenu = customtkinter.CTkOptionMenu(self.sidebar_frame,
+                                                               values=["0", "1", "2", "3", "4", "5", "6", "7", "8",
+                                                                       "9"],
+                                                               command=self.change_gesture_id)
+        self.gesture_optionemenu.grid(row=4, column=0, padx=50, pady=(150, 0))
+        self.gesture_optionemenu.grid(row=4, column=0, padx=50, pady=(150, 0))
 
-        #  ####################################################################
-        if results.multi_hand_landmarks is not None:
-            for hand_landmarks, handedness in zip(results.multi_hand_landmarks,
-                                                  results.multi_handedness):
-                # Bounding box calculation
-                brect = calc_bounding_rect(debug_image, hand_landmarks)
-                # Landmark calculation
-                landmark_list = calc_landmark_list(debug_image, hand_landmarks)
+        # create radiobutton frame
+        self.radiobutton_frame = customtkinter.CTkFrame(self)
+        self.radiobutton_frame.grid(row=0, column=3, padx=(20, 20), pady=(20, 0), sticky="nsew")
+        self.radio_var = tkinter.IntVar(value=0)
+        self.label_radio_group = customtkinter.CTkLabel(master=self.radiobutton_frame, text="Data Recording Mode")
+        self.label_radio_group.grid(row=0, column=2, columnspan=1, padx=10, pady=10, sticky="")
+        self.radio_button_1 = customtkinter.CTkRadioButton(master=self.radiobutton_frame, variable=self.radio_var,
+                                                           value=1, text="Static Gesture Mode   ",
+                                                           command=self.mode_selector)
+        self.radio_button_1.grid(row=3, column=2, pady=10, padx=20, sticky="n")
+        self.radio_button_2 = customtkinter.CTkRadioButton(master=self.radiobutton_frame, variable=self.radio_var,
+                                                           value=2, text="Dynamic Gesture Mode",
+                                                           command=self.mode_selector)
+        self.radio_button_2.grid(row=2, column=2, pady=10, padx=20, sticky="n")
+        self.radio_button_3 = customtkinter.CTkRadioButton(master=self.radiobutton_frame, variable=self.radio_var,
+                                                           value=0, text="Normal Gesture Mode   ",
+                                                           command=self.mode_selector)
+        self.radio_button_3.grid(row=1, column=2, pady=10, padx=20, sticky="n")
 
-                # Conversion to relative coordinates / normalized coordinates
-                pre_processed_landmark_list = pre_process_landmark(
-                    landmark_list)
-                pre_processed_point_history_list = pre_process_point_history(
-                    debug_image, point_history)
-                # Write to the dataset file
-                logging_csv(number, mode, pre_processed_landmark_list,
+        self.numberbutton_frame = customtkinter.CTkFrame(self)
+        self.numberbutton_frame.grid(row=0, column=4, padx=(20, 20), pady=(20, 0), sticky="nsew")
+        self.number_var = tkinter.IntVar(value=0)
+
+        # create checkbox and switch frame
+        self.checkbox_slider_frame = customtkinter.CTkFrame(self)
+        self.checkbox_slider_frame.grid(row=1, column=3, padx=(20, 20), pady=(20, 0), sticky="nsew")
+        self.checkbox_1 = customtkinter.CTkCheckBox(master=self.checkbox_slider_frame, text="Enable drawing",
+                                                    command=self.enable_disable_drawing)
+        self.checkbox_1.grid(row=1, column=0, pady=(20, 0), padx=20, sticky="n")
+        self.checkbox_2 = customtkinter.CTkCheckBox(master=self.checkbox_slider_frame, text="Show FPS")
+        self.checkbox_2.grid(row=2, column=0, pady=(20, 0), padx=20, sticky="n")
+        self.checkbox_3 = customtkinter.CTkCheckBox(master=self.checkbox_slider_frame)
+        self.checkbox_3.grid(row=3, column=0, pady=20, padx=20, sticky="n")
+
+        # create a terminal like display frame
+        self.termina_like_display = customtkinter.CTkTextbox(self, wrap="word", width=100, height=300)
+        self.termina_like_display.grid(row=1, column=2, padx=(20, 0), pady=(20, 0), sticky="nsew")
+        self.termina_like_display.grid_columnconfigure(0, weight=1)
+        self.termina_like_display.grid_rowconfigure(4, weight=1)
+
+        # create a terminal like display frame for landmark tracking
+        self.tracking_like_display = customtkinter.CTkTextbox(self, wrap="word", width=100, height=300)
+        self.tracking_like_display.grid(row=1, column=1, padx=(20, 0), pady=(20, 0), sticky="nsew")
+        self.tracking_like_display.grid_columnconfigure(0, weight=1)
+        self.tracking_like_display.grid_rowconfigure(4, weight=1)
+
+        # set default values
+        self.appearance_mode_optionemenu.set("Dark")
+        self.scaling_optionemenu.set("100%")
+        self.detection_optionemenu.set("0.5")
+        self.tracking_optionemenu.set("0.5")
+        self.Max_hands_optionemenu.set("1")
+        self.gesture_optionemenu.set("0")
+
+        self.is_running = False
+        self.drawing = False
+        self.loop = asyncio.new_event_loop()
+
+        # Start asyncio loop in a separate thread
+        threading.Thread(target=self.run_event_loop, daemon=True).start()
+
+        keypoint_classifier = KeyPointClassifier()
+
+        point_history_classifier = PointHistoryClassifier()
+
+        # Read labels ###########################################################
+        with open('model/keypoint_classifier/keypoint_classifier_label.csv',
+                  encoding='utf-8-sig') as f:
+            keypoint_classifier_labels = csv.reader(f)
+            keypoint_classifier_labels = [
+                row[0] for row in keypoint_classifier_labels
+            ]
+        with open(
+                'model/point_history_classifier/point_history_classifier_label.csv',
+                encoding='utf-8-sig') as f:
+            point_history_classifier_labels = csv.reader(f)
+            point_history_classifier_labels = [
+                row[0] for row in point_history_classifier_labels
+            ]
+
+        # FPS Measurement ########################################################
+        cvFpsCalc = CvFpsCalc(buffer_len=10)
+
+        # Coordinate history #################################################################
+        history_length = 16
+        point_history = deque(maxlen=history_length)
+
+        # Finger gesture history ################################################
+        finger_gesture_history = deque(maxlen=history_length)
+
+        #  ########################################################################
+        # mode = 0
+
+        while True:
+            fps = cvFpsCalc.get()
+
+            # Process Key (ESC: end) #################################################
+            key = cv.waitKey(10)
+            if key == 27:  # ESC
+                break
+            number, mode = select_mode(key, self.mode)
+
+            # Camera capture #####################################################
+            ret, image = self.cap.read()
+            if not ret:
+                break
+            image = cv.flip(image, 1)  # Mirror display
+            debug_image = copy.deepcopy(image)
+
+            # Detection implementation #############################################################
+            image = cv.cvtColor(image, cv.COLOR_BGR2RGB)
+
+            image.flags.writeable = False
+            results = self.hands.process(image)
+            image.flags.writeable = True
+
+            #  ####################################################################
+            if results.multi_hand_landmarks is not None:
+                for hand_landmarks, handedness in zip(results.multi_hand_landmarks,
+                                                      results.multi_handedness):
+                    # Bounding box calculation
+                    brect = calc_bounding_rect(debug_image, hand_landmarks)
+                    # Landmark calculation
+                    landmark_list = calc_landmark_list(debug_image, hand_landmarks)
+
+                    # Conversion to relative coordinates / normalized coordinates
+                    pre_processed_landmark_list = pre_process_landmark(
+                        landmark_list)
+                    pre_processed_point_history_list = pre_process_point_history(
+                        debug_image, point_history)
+                    # Write to the dataset file
+                    logging_csv(number, mode, pre_processed_landmark_list,
+                                pre_processed_point_history_list)
+
+                    # Hand sign classification
+                    hand_sign_id = keypoint_classifier(pre_processed_landmark_list)
+                    if hand_sign_id == 2:  # Point gesture
+                        point_history.append(landmark_list[8])
+                    else:
+                        point_history.append([0, 0])
+
+                    # Finger gesture classification
+                    finger_gesture_id = 0
+                    point_history_len = len(pre_processed_point_history_list)
+                    if point_history_len == (history_length * 2):
+                        finger_gesture_id = point_history_classifier(
                             pre_processed_point_history_list)
 
-                # Hand sign classification
-                hand_sign_id = keypoint_classifier(pre_processed_landmark_list)
-                if hand_sign_id == 2:  # Point gesture
-                    point_history.append(landmark_list[8])
-                else:
-                    point_history.append([0, 0])
+                    # Calculates the gesture IDs in the latest detection
+                    finger_gesture_history.append(finger_gesture_id)
+                    most_common_fg_id = Counter(
+                        finger_gesture_history).most_common()
 
-                # Finger gesture classification
-                finger_gesture_id = 0
-                point_history_len = len(pre_processed_point_history_list)
-                if point_history_len == (history_length * 2):
-                    finger_gesture_id = point_history_classifier(
-                        pre_processed_point_history_list)
+                    # Drawing part
+                    debug_image = draw_bounding_rect(use_brect, debug_image, brect)
+                    debug_image = draw_landmarks(debug_image, landmark_list)
+                    debug_image = draw_info_text(
+                        debug_image,
+                        brect,
+                        handedness,
+                        keypoint_classifier_labels[hand_sign_id],
+                        point_history_classifier_labels[most_common_fg_id[0][0]],
+                    )
+            else:
+                point_history.append([0, 0])
 
-                # Calculates the gesture IDs in the latest detection
-                finger_gesture_history.append(finger_gesture_id)
-                most_common_fg_id = Counter(
-                    finger_gesture_history).most_common()
+            debug_image = draw_point_history(debug_image, point_history)
+            debug_image = draw_info(debug_image, fps, mode, number)
 
-                # Drawing part
-                debug_image = draw_bounding_rect(use_brect, debug_image, brect)
-                debug_image = draw_landmarks(debug_image, landmark_list)
-                debug_image = draw_info_text(
-                    debug_image,
-                    brect,
-                    handedness,
-                    keypoint_classifier_labels[hand_sign_id],
-                    point_history_classifier_labels[most_common_fg_id[0][0]],
-                )
-        else:
-            point_history.append([0, 0])
+            # Screen reflection #############################################################
+            cv.imshow('Hand Gesture Recognition', debug_image)
 
-        debug_image = draw_point_history(debug_image, point_history)
-        debug_image = draw_info(debug_image, fps, mode, number)
+        self.cap.release()
+        cv.destroyAllWindows()
 
-        # Screen reflection #############################################################
-        cv.imshow('Hand Gesture Recognition', debug_image)
+    def start_frame(self):
+        self.log_to_terminal(f"Started Capture and Processing")
+        self.is_running = True
+        asyncio.run_coroutine_threadsafe(self.update_video(), self.loop)
 
-    cap.release()
-    cv.destroyAllWindows()
+    def stop_frame(self):
+        self.log_to_terminal(f"Stopped frame processing")
+        self.is_running = False
+
+    def run_event_loop(self):
+        self.log_to_terminal(f"Running event loop")
+        asyncio.set_event_loop(self.loop)
+        self.loop.run_forever()
+        self.log_to_terminal(f"Success!")
+
+    def log_to_terminal(self, message):
+        """Append a message to the terminal-like display."""
+        self.termina_like_display.insert("end", f"{message}\n")
+        self.termina_like_display.see("end")  # Auto-scroll to the latest entry
+
+    def log_to_tracking(self, message):
+        """Append tracking landmark details to the terminal-like display"""
+        self.tracking_like_display.insert("end", f"{message}\n")
+        self.tracking_like_display.see("end")  # Auto-scroll to the latest entry
+
+    def change_scaling_event(self, new_scaling: str):
+        self.log_to_terminal(f"Adjusted Scale Size to {new_scaling}")
+        new_scaling_float = int(new_scaling.replace("%", "")) / 100
+        customtkinter.set_widget_scaling(new_scaling_float)
+
 
 
 def select_mode(key, mode):
