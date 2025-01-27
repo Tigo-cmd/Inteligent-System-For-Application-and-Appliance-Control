@@ -319,26 +319,31 @@ class WindowUi(customtkinter.CTk):
         self.is_running = True
         asyncio.run_coroutine_threadsafe(self.update_video(), self.loop)
 
+    # stops the frame
     def stop_frame(self):
         self.log_to_terminal(f"Stopped frame processing")
         self.is_running = False
 
+    # starts the frame
     def run_event_loop(self):
         self.log_to_terminal(f"Running event loop")
         asyncio.set_event_loop(self.loop)
         self.loop.run_forever()
         self.log_to_terminal(f"Success!")
 
+    # log messages to terminal
     def log_to_terminal(self, message):
         """Append a message to the terminal-like display."""
         self.termina_like_display.insert("end", f"{message}\n")
         self.termina_like_display.see("end")  # Auto-scroll to the latest entry
 
+    # logs tracking messages to be viewed and displayed for the user to seee
     def log_to_tracking(self, message):
         """Append tracking landmark details to the terminal-like display"""
         self.tracking_like_display.insert("end", f"{message}\n")
         self.tracking_like_display.see("end")  # Auto-scroll to the latest entry
 
+    # changes scales of the window size enabling zooming features
     def change_scaling_event(self, new_scaling: str):
         self.log_to_terminal(f"Adjusted Scale Size to {new_scaling}")
         new_scaling_float = int(new_scaling.replace("%", "")) / 100
