@@ -83,7 +83,6 @@ class WindowUi(customtkinter.CTk):
         self.scaling_optionemenu = customtkinter.CTkOptionMenu(self.sidebar_frame,
                                                                values=["80%", "90%", "100%", "110%", "120%"],
                                                                command=self.change_scaling_event)
-        use_brect = True
 
         # create menu for changing theme
         self.appearance_mode_label = customtkinter.CTkLabel(self.sidebar_frame, text="Appearance Mode:", anchor="w")
@@ -200,9 +199,13 @@ class WindowUi(customtkinter.CTk):
         # Start asyncio loop in a separate thread
         threading.Thread(target=self.run_event_loop, daemon=True).start()
 
+    async def update_video(self):
+        """Capture video frame and update the label asynchronously"""
         keypoint_classifier = KeyPointClassifier()
 
         point_history_classifier = PointHistoryClassifier()
+
+        use_brect = True
 
         # Read labels ###########################################################
         with open('model/keypoint_classifier/keypoint_classifier_label.csv',
@@ -232,84 +235,85 @@ class WindowUi(customtkinter.CTk):
         #  ########################################################################
         # mode = 0
 
-        while True:
-            fps = cvFpsCalc.get()
+        while self.is_running:
+            while True:
+                fps = cvFpsCalc.get()
 
-            # Process Key (ESC: end) #################################################
-            key = cv.waitKey(10)
-            if key == 27:  # ESC
-                break
-            number, mode = select_mode(key, self.mode)
+                # Process Key (ESC: end) #################################################
+                key = cv.waitKey(10)
+                if key == 27:  # ESC
+                    break
+                number, mode = self.select_mode(key, self.mode)
 
-            # Camera capture #####################################################
-            ret, image = self.cap.read()
-            if not ret:
-                break
-            image = cv.flip(image, 1)  # Mirror display
-            debug_image = copy.deepcopy(image)
+                # Camera capture #####################################################
+                ret, image = self.cap.read()
+                if not ret:
+                    break
+                image = cv.flip(image, 1)  # Mirror display
+                debug_image = copy.deepcopy(image)
 
-            # Detection implementation #############################################################
-            image = cv.cvtColor(image, cv.COLOR_BGR2RGB)
+                # Detection implementation #############################################################
+                image = cv.cvtColor(image, cv.COLOR_BGR2RGB)
 
-            image.flags.writeable = False
-            results = self.hands.process(image)
-            image.flags.writeable = True
+                image.flags.writeable = False
+                results = self.hands.process(image)
+                image.flags.writeable = True
 
-            #  ####################################################################
-            if results.multi_hand_landmarks is not None:
-                for hand_landmarks, handedness in zip(results.multi_hand_landmarks,
-                                                      results.multi_handedness):
-                    # Bounding box calculation
-                    brect = calc_bounding_rect(debug_image, hand_landmarks)
-                    # Landmark calculation
-                    landmark_list = calc_landmark_list(debug_image, hand_landmarks)
+                #  ####################################################################
+                if results.multi_hand_landmarks is not None:
+                    for hand_landmarks, handedness in zip(results.multi_hand_landmarks,
+                                                          results.multi_handedness):
+                        # Bounding box calculation
+                        brect = calc_bounding_rect(debug_image, hand_landmarks)
+                        # Landmark calculation
+                        landmark_list = calc_landmark_list(debug_image, hand_landmarks)
 
-                    # Conversion to relative coordinates / normalized coordinates
-                    pre_processed_landmark_list = pre_process_landmark(
-                        landmark_list)
-                    pre_processed_point_history_list = pre_process_point_history(
-                        debug_image, point_history)
-                    # Write to the dataset file
-                    logging_csv(number, mode, pre_processed_landmark_list,
+                        # Conversion to relative coordinates / normalized coordinates
+                        pre_processed_landmark_list = pre_process_landmark(
+                            landmark_list)
+                        pre_processed_point_history_list = pre_process_point_history(
+                            debug_image, point_history)
+                        # Write to the dataset file
+                        logging_csv(number, mode, pre_processed_landmark_list,
+                                    pre_processed_point_history_list)
+
+                        # Hand sign classification
+                        hand_sign_id = keypoint_classifier(pre_processed_landmark_list)
+                        if hand_sign_id == 2:  # Point gesture
+                            point_history.append(landmark_list[8])
+                        else:
+                            point_history.append([0, 0])
+
+                        # Finger gesture classification
+                        finger_gesture_id = 0
+                        point_history_len = len(pre_processed_point_history_list)
+                        if point_history_len == (history_length * 2):
+                            finger_gesture_id = point_history_classifier(
                                 pre_processed_point_history_list)
 
-                    # Hand sign classification
-                    hand_sign_id = keypoint_classifier(pre_processed_landmark_list)
-                    if hand_sign_id == 2:  # Point gesture
-                        point_history.append(landmark_list[8])
-                    else:
-                        point_history.append([0, 0])
+                        # Calculates the gesture IDs in the latest detection
+                        finger_gesture_history.append(finger_gesture_id)
+                        most_common_fg_id = Counter(
+                            finger_gesture_history).most_common()
 
-                    # Finger gesture classification
-                    finger_gesture_id = 0
-                    point_history_len = len(pre_processed_point_history_list)
-                    if point_history_len == (history_length * 2):
-                        finger_gesture_id = point_history_classifier(
-                            pre_processed_point_history_list)
+                        # Drawing part
+                        debug_image = draw_bounding_rect(use_brect, debug_image, brect)
+                        debug_image = draw_landmarks(debug_image, landmark_list)
+                        debug_image = draw_info_text(
+                            debug_image,
+                            brect,
+                            handedness,
+                            keypoint_classifier_labels[hand_sign_id],
+                            point_history_classifier_labels[most_common_fg_id[0][0]],
+                        )
+                else:
+                    point_history.append([0, 0])
 
-                    # Calculates the gesture IDs in the latest detection
-                    finger_gesture_history.append(finger_gesture_id)
-                    most_common_fg_id = Counter(
-                        finger_gesture_history).most_common()
+                debug_image = draw_point_history(debug_image, point_history)
+                debug_image = draw_info(debug_image, fps, mode, number)
 
-                    # Drawing part
-                    debug_image = draw_bounding_rect(use_brect, debug_image, brect)
-                    debug_image = draw_landmarks(debug_image, landmark_list)
-                    debug_image = draw_info_text(
-                        debug_image,
-                        brect,
-                        handedness,
-                        keypoint_classifier_labels[hand_sign_id],
-                        point_history_classifier_labels[most_common_fg_id[0][0]],
-                    )
-            else:
-                point_history.append([0, 0])
-
-            debug_image = draw_point_history(debug_image, point_history)
-            debug_image = draw_info(debug_image, fps, mode, number)
-
-            # Screen reflection #############################################################
-            cv.imshow('Hand Gesture Recognition', debug_image)
+                # Screen reflection #############################################################
+                cv.imshow('Hand Gesture Recognition', debug_image)
 
         self.cap.release()
         cv.destroyAllWindows()
@@ -349,19 +353,55 @@ class WindowUi(customtkinter.CTk):
         new_scaling_float = int(new_scaling.replace("%", "")) / 100
         customtkinter.set_widget_scaling(new_scaling_float)
 
+    def enable_disable_drawing(self):
+        """Enable or disable landmark drawing based on checkbox state."""
+        if self.checkbox_1.get():  # Returns True if checked, False otherwise
+            self.drawing = True
+            self.log_to_terminal("Drawing enabled")
+        else:
+            self.drawing = False
+            self.log_to_terminal("Drawing disabled")
 
+    def change_Max_hands(self, value):
+        self.log_to_terminal(f"Detecting {value} hand(s)")
+        # Reinitialize MediaPipe Hands with updated parameters
+        self.hands = mp.solutions.hands.Hands(max_num_hands=int(value))
 
-def select_mode(key, mode):
-    number = -1
-    if 48 <= key <= 57:  # 0 ~ 9
-        number = key - 48
-    if key == 110:  # n
-        mode = 0
-    if key == 107:  # k
-        mode = 1
-    if key == 104:  # h
-        mode = 2
-    return number, mode
+    def change_detection_confidence(self, value):
+        """ change detection confidence"""
+        self.log_to_terminal(f"Minimum Detection confidence {value}")
+        # Reinitialize MediaPipe detection confidence with updated parameters
+        self.hands = mp.solutions.hands.Hands(min_detection_confidence=int(value))
+
+    def change_tracking_confidence(self, value):
+        """ change tracking confidence """
+        self.log_to_terminal(f"Tracking confidence {value}")
+        self.hands = mp.solutions.hands.Hands(min_tracking_confidence=int(value))
+
+    def mode_selector(self):
+        """handler function for mode selection"""
+        selected = self.radio_var.get()
+        if selected == 0:
+            self.log_to_terminal("Normal Mode selected.")
+            self.mode = 0
+        elif selected == 1:
+            self.log_to_terminal("Static Gesture Mode selected.")
+            self.mode = 1
+        elif selected == 2:
+            self.log_to_terminal("Dynamic Gesture Mode selected.")
+            self.mode = 2
+
+    def select_mode(self, key, mode):
+        number = -1
+        if 48 <= key <= 57:  # 0 ~ 9
+            number = key - 48
+        if key == 110:  # n
+            mode = 0
+        if key == 107:  # k
+            mode = 1
+        if key == 104:  # h
+            mode = 2
+        return number, mode
 
 
 def calc_bounding_rect(image, landmarks):
