@@ -7,6 +7,7 @@ Graphic user interface implementation for Application with asynchronous video pr
 import csv
 import copy
 import itertools
+import time
 from collections import Counter
 from collections import deque
 import tkinter
@@ -178,8 +179,12 @@ class WindowUi(customtkinter.CTk):
         self.checkbox_2 = customtkinter.CTkCheckBox(master=self.checkbox_slider_frame, text="Show FPS",
                                                     command=self.show_fps)
         self.checkbox_2.grid(row=2, column=0, pady=(20, 0), padx=20, sticky="n")
-        self.checkbox_3 = customtkinter.CTkCheckBox(master=self.checkbox_slider_frame)
+        self.checkbox_3 = customtkinter.CTkCheckBox(master=self.checkbox_slider_frame, text="Hand Tracking blue",
+                                                    command=self.show_blue)
         self.checkbox_3.grid(row=3, column=0, pady=20, padx=20, sticky="n")
+        self.checkbox_4 = customtkinter.CTkCheckBox(master=self.checkbox_slider_frame, text="Hand Tracking white",
+                                                    command=self.show_white)
+        self.checkbox_4.grid(row=4, column=0, pady=20, padx=20, sticky="n")
 
         # create a terminal like display frame
         self.termina_like_display = customtkinter.CTkTextbox(self, wrap="word", width=100, height=300)
@@ -204,10 +209,25 @@ class WindowUi(customtkinter.CTk):
         self.is_running = False
         self.drawing = False
         self.fps = False
+        self.blue = False
+        self.white = False
         self.loop = asyncio.new_event_loop()
 
         # Start asyncio loop in a separate thread
         threading.Thread(target=self.run_event_loop, daemon=True).start()
+
+    def mode_selector(self):
+        """handler function for mode selection"""
+        selected = self.radio_var.get()
+        if selected == 0:
+            self.log_to_terminal("Normal Mode selected.")
+            self.mode = 0
+        elif selected == 1:
+            self.log_to_terminal("Static Gesture Mode selected.")
+            self.mode = 1
+        elif selected == 2:
+            self.log_to_terminal("Dynamic Gesture Mode selected.")
+            self.mode = 2
 
     async def update_video(self):
         """Capture video frame and update the label asynchronously"""
@@ -251,9 +271,9 @@ class WindowUi(customtkinter.CTk):
                 fps = cvFpsCalc.get()
 
                 # Process Key (ESC: end) #################################################
-                key = cv.waitKey(10)
-                if key == 27:  # ESC
-                    break
+                # key = cv.waitKey(10)
+                # if key == 27:  # ESC
+                #     break
                 # self.number, self.mode = self.select_mode(key, self.mode)
 
                 # Camera capture #####################################################
@@ -314,7 +334,10 @@ class WindowUi(customtkinter.CTk):
                         if self.drawing:
                             # Drawing part
                             debug_image = draw_bounding_rect(use_brect, debug_image, brect)
-                            debug_image = draw_landmarks(debug_image, landmark_list)
+                            if self.white:
+                                debug_image = draw_landmarks(debug_image, landmark_list)
+                            if self.blue:
+                                self.mp_drawing.draw_landmarks(debug_image, hand_landmarks, self.mp_hands.HAND_CONNECTIONS)
                             debug_image = draw_info_text(
                                 debug_image,
                                 brect,
@@ -405,6 +428,30 @@ class WindowUi(customtkinter.CTk):
             self.fps = False
             self.log_to_terminal("disabled FPS")
 
+    def show_white(self):
+        """
+        sets color of hand drawing
+        :return:
+        """
+        if self.checkbox_4.get():  # Returns True if checked, False otherwise
+            self.white = True
+            self.log_to_terminal(" enabled Hand Tracing White")
+        else:
+            self.white = False
+            self.log_to_terminal("disabled Hand Tracing White")
+
+    def show_blue(self):
+        """
+        sets color of hand drawing
+        :return:
+        """
+        if self.checkbox_3.get():  # Returns True if checked, False otherwise
+            self.blue = True
+            self.log_to_terminal(" enabled Hand Tracing blue")
+        else:
+            self.blue = False
+            self.log_to_terminal("disabled Hand Tracing blue")
+
     def enable_disable_drawing(self):
         """Enable or disable landmark drawing based on checkbox state."""
         if self.checkbox_1.get():  # Returns True if checked, False otherwise
@@ -429,19 +476,6 @@ class WindowUi(customtkinter.CTk):
         """ change tracking confidence """
         self.log_to_terminal(f"Tracking confidence {value}")
         self.hands = mp.solutions.hands.Hands(min_tracking_confidence=int(value))
-
-    def mode_selector(self):
-        """handler function for mode selection"""
-        selected = self.radio_var.get()
-        if selected == 0:
-            self.log_to_terminal("Normal Mode selected.")
-            self.mode = 0
-        elif selected == 1:
-            self.log_to_terminal("Static Gesture Mode selected.")
-            self.mode = 1
-        elif selected == 2:
-            self.log_to_terminal("Dynamic Gesture Mode selected.")
-            self.mode = 2
 
     # def select_mode(self, key, mode):
     #     number = -1
