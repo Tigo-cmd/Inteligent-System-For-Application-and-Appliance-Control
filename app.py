@@ -211,6 +211,10 @@ class WindowUi(customtkinter.CTk):
         self.fps = False
         self.blue = False
         self.white = False
+        self.hand_sign_id = None
+        self.prev_action = None
+        # self.last_action_time = 0  # To track the time of the last action
+        # self.cooldown = 0.5  # Cooldown in seconds (adjust as needed)
         self.loop = asyncio.new_event_loop()
 
         # Start asyncio loop in a separate thread
@@ -313,8 +317,8 @@ class WindowUi(customtkinter.CTk):
                                              f"{pre_processed_point_history_list}")
 
                         # Hand sign classification
-                        hand_sign_id = keypoint_classifier(pre_processed_landmark_list)
-                        if hand_sign_id == 2:  # Point gesture
+                        self.hand_sign_id = keypoint_classifier(pre_processed_landmark_list)
+                        if self.hand_sign_id == 2:  # Point gesture
                             point_history.append(landmark_list[8])
                         else:
                             point_history.append([0, 0])
@@ -342,7 +346,7 @@ class WindowUi(customtkinter.CTk):
                                 debug_image,
                                 brect,
                                 handedness,
-                                keypoint_classifier_labels[hand_sign_id],
+                                keypoint_classifier_labels[self.hand_sign_id],
                                 point_history_classifier_labels[most_common_fg_id[0][0]],
                             )
                 else:
@@ -365,8 +369,22 @@ class WindowUi(customtkinter.CTk):
 
             await asyncio.sleep(0.01)  # Small delay to prevent overloading the event loop
 
-        # self.cap.release()
-        # cv.destroyAllWindows()
+            # current_time = time.time()
+
+            if self.hand_sign_id == 0:  # Swipe left
+                if self.prev_action != "left":
+                    self.log_to_terminal("Swipe Left - Previous Slide")
+                    pyautogui.press("left")
+                    self.prev_action = "left"
+
+            elif self.hand_sign_id == 3:  # Swipe right
+                if self.prev_action != "right":
+                    self.log_to_terminal("Swipe Right - Next Slide")
+                    pyautogui.press("right")
+                    self.prev_action = "right"
+
+            else:
+                self.prev_action = None
 
     def start_frame(self):
         self.log_to_terminal(f"Started Capture and Processing")
