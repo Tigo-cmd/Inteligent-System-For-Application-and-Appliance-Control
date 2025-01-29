@@ -370,21 +370,20 @@ class WindowUi(customtkinter.CTk):
             await asyncio.sleep(0.01)  # Small delay to prevent overloading the event loop
 
             # current_time = time.time()
-
-            if self.hand_sign_id == 0:  # Swipe left
-                if self.prev_action != "left":
-                    self.log_to_terminal("Swipe Left - Previous Slide")
-                    pyautogui.press("left")
-                    self.prev_action = "left"
-
-            elif self.hand_sign_id == 3:  # Swipe right
-                if self.prev_action != "right":
-                    self.log_to_terminal("Swipe Right - Next Slide")
-                    pyautogui.press("right")
-                    self.prev_action = "right"
-
-            else:
-                self.prev_action = None
+            # if self.hand_sign_id == 0:  # Swipe left
+            #     if self.prev_action != "left":
+            #         self.log_to_terminal("Swipe Left - Previous Slide")
+            #         pyautogui.press("left")
+            #         self.prev_action = "left"
+            #
+            # elif self.hand_sign_id == 3:  # Swipe right
+            #     if self.prev_action != "right":
+            #         self.log_to_terminal("Swipe Right - Next Slide")
+            #         pyautogui.press("right")
+            #         self.prev_action = "right"
+            #
+            # else:
+            #     self.prev_action = None
 
     def start_frame(self):
         self.log_to_terminal(f"Started Capture and Processing")
@@ -392,14 +391,14 @@ class WindowUi(customtkinter.CTk):
         asyncio.run_coroutine_threadsafe(self.update_video(), self.loop)
 
     def change_gesture_id(self, value):
-        """change Gesture Id for Classifications"""
+        """change Gesture ID for Classifications"""
         self.log_to_terminal(f"{value} ID selected")
         self.number = int(value)
 
     def train_model(self):
         """strikes the numbers gotten from self  numbers and press repeatedly to log to csv """
         pyautogui.press(str(self.number))
-        self.log_to_terminal(f"Training gesture to id {self.number}")
+        self.log_to_terminal(f"Training gesture to id {self.number} ")
 
     # stops the frame
     def stop_frame(self):
