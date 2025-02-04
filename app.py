@@ -310,6 +310,7 @@ class WindowUi(customtkinter.CTk):
                             landmark_list)
                         pre_processed_point_history_list = pre_process_point_history(
                             debug_image, point_history)
+
                         # Write to the dataset file
                         logging_csv(self.number, self.mode, pre_processed_landmark_list,
                                     pre_processed_point_history_list)
@@ -368,22 +369,22 @@ class WindowUi(customtkinter.CTk):
                 self.video_label.configure(image=imgtk)
 
             await asyncio.sleep(0.01)  # Small delay to prevent overloading the event loop
+            #
+            current_time = time.time()
+            if self.hand_sign_id == 8:  # Swipe left
+                if self.prev_action != "left":
+                    self.log_to_terminal("Swipe Left - Previous Slide")
+                    pyautogui.press("left")
+                    self.prev_action = "left"
 
-            # current_time = time.time()
-            # if self.hand_sign_id == 0:  # Swipe left
-            #     if self.prev_action != "left":
-            #         self.log_to_terminal("Swipe Left - Previous Slide")
-            #         pyautogui.press("left")
-            #         self.prev_action = "left"
-            #
-            # elif self.hand_sign_id == 3:  # Swipe right
-            #     if self.prev_action != "right":
-            #         self.log_to_terminal("Swipe Right - Next Slide")
-            #         pyautogui.press("right")
-            #         self.prev_action = "right"
-            #
-            # else:
-            #     self.prev_action = None
+            elif self.hand_sign_id == 3:  # Swipe right
+                if self.prev_action != "right":
+                    self.log_to_terminal("Swipe Right - Next Slide")
+                    pyautogui.press("right")
+                    self.prev_action = "right"
+
+            else:
+                self.prev_action = None
 
     def start_frame(self):
         self.log_to_terminal(f"Started Capture and Processing")
