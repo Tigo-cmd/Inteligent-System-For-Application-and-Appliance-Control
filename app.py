@@ -5,6 +5,7 @@ Graphic user interface implementation for Application with asynchronous video pr
 
 """
 import csv
+import serial
 import copy
 import itertools
 import time
@@ -40,6 +41,7 @@ class WindowUi(customtkinter.CTk):
     def __init__(self):
         """Initializer at first call"""
         super().__init__()
+        # self.change_control_mode = None
         self.geometry(f"{1100}x{580}")
         self.title("Intelligent-System-For-Application-and-Appliance-Control")
 
@@ -51,6 +53,9 @@ class WindowUi(customtkinter.CTk):
         # # mode initializer ########################################################################
         self.mode = 0
         self.number = None
+        self.control_mode = "Application"  # default
+        self.serial_conn = None
+        self.current_servo_angles = [90] * 5  # initialize at middle position (0–180)
 
         # MediaPipe Hands
         self.mp_hands = mp.solutions.hands
@@ -74,6 +79,30 @@ class WindowUi(customtkinter.CTk):
         self.sidebar_button_1.grid(row=1, column=0, padx=20, pady=10)
         self.sidebar_button_2 = customtkinter.CTkButton(self.sidebar_frame, text="Stop", command=self.stop_frame)
         self.sidebar_button_2.grid(row=2, column=0, padx=20, pady=10)
+
+        self.control_mode_label = customtkinter.CTkLabel(self.sidebar_frame, text="Control Mode:", anchor="w")
+        self.control_mode_label.grid(row=9, column=0, padx=20, pady=(10, 0))
+        self.control_mode_optionemenu = customtkinter.CTkOptionMenu(
+            self.sidebar_frame,
+            values=["Application", "Appliance"],
+            command=self.change_control_mode
+        )
+
+        # sets serial port for robotic arm or appliances
+
+        self.serial_port_var = tkinter.StringVar(value="/dev/ttyUSB0")  # or adjust default
+        self.baudrate_var = tkinter.StringVar(value="115200")
+
+        self.serial_label = customtkinter.CTkLabel(self.sidebar_frame, text="Serial Port:", anchor="w")
+        self.serial_label.grid(row=11, column=0, padx=20, pady=(0, 5))
+        self.serial_entry = customtkinter.CTkEntry(self.sidebar_frame, textvariable=self.serial_port_var)
+        self.serial_entry.grid(row=12, column=0, padx=20, pady=(0, 5))
+
+        self.baud_label = customtkinter.CTkLabel(self.sidebar_frame, text="Baud Rate:", anchor="w")
+        self.baud_label.grid(row=13, column=0, padx=20, pady=(0, 5))
+        self.baud_entry = customtkinter.CTkEntry(self.sidebar_frame, textvariable=self.baudrate_var)
+        self.baud_entry.grid(row=14, column=0, padx=20, pady=(0, 5))
+
 
         # menu for seting appearance mode for light to dark and vice versa
         # create menu for changing theme
@@ -164,11 +193,14 @@ class WindowUi(customtkinter.CTk):
         self.radio_button_3 = customtkinter.CTkRadioButton(master=self.radiobutton_frame, variable=self.radio_var,
                                                            value=0, text="Normal Gesture Mode   ",
                                                            command=self.mode_selector)
-        self.radio_button_3.grid(row=1, column=2, pady=10, padx=20, sticky="n")
+        self.radio_button_3.grid(row=1, column=2, pady=10, padx=0, sticky="n")
 
-        # self.numberbutton_frame = customtkinter.CTkFrame(self)
-        # self.numberbutton_frame.grid(row=0, column=4, padx=(20, 20), pady=(20, 0), sticky="nsew")
-        # self.number_var = tkinter.IntVar(value=0)
+        self.connect_button = customtkinter.CTkButton(self.sidebar_frame, text="Connect Arm",
+                                                      command=self.connect_serial)
+        self.connect_button.grid(row=13, column=3, padx=10, pady=10)
+        self.disconnect_button = customtkinter.CTkButton(self.sidebar_frame, text="Disconnect Arm",
+                                                         command=self.disconnect_serial)
+        self.disconnect_button.grid(row=14, column=3, padx=10, pady=10)
 
         # create checkbox and switch frame
         self.checkbox_slider_frame = customtkinter.CTkFrame(self)
@@ -185,6 +217,10 @@ class WindowUi(customtkinter.CTk):
         self.checkbox_4 = customtkinter.CTkCheckBox(master=self.checkbox_slider_frame, text="Hand Tracking white",
                                                     command=self.show_white)
         self.checkbox_4.grid(row=4, column=0, pady=20, padx=20, sticky="n")
+        # In __init__ of WindowUi, after other OptionMenus:
+
+        self.control_mode_optionemenu.set("Application")
+        self.control_mode_optionemenu.grid(row=10, column=0, padx=20, pady=(0, 20))
 
         # create a terminal like display frame
         self.termina_like_display = customtkinter.CTkTextbox(self, wrap="word", width=100, height=300)
@@ -200,7 +236,7 @@ class WindowUi(customtkinter.CTk):
 
         # set default values
         self.appearance_mode_optionemenu.set("Dark")
-        self.scaling_optionemenu.set("100%")
+        self.scaling_optionemenu.set("80%")
         self.detection_optionemenu.set("0.5")
         self.tracking_optionemenu.set("0.5")
         self.Max_hands_optionemenu.set("1")
@@ -219,6 +255,116 @@ class WindowUi(customtkinter.CTk):
 
         # Start asyncio loop in a separate thread
         threading.Thread(target=self.run_event_loop, daemon=True).start()
+
+    def send_servo_command(self, joint_index, angle):
+        """
+        Send a command over serial to set servo joint_index (0..4) to angle (0..180).
+        Protocol example: send lines like "J0:90\n" or "0,90\n".
+        On Arduino side, parse and write to servo.
+        """
+        if not self.serial_conn or not self.serial_conn.is_open:
+            return
+        try:
+            # Example protocol: "J<index>:<angle>\n"
+            cmd = f"J{joint_index}:{angle}\n"
+            # If using a simpler CSV-like: f"{joint_index},{angle}\n"
+            self.serial_conn.write(cmd.encode('utf-8'))
+            self.log_to_terminal(f"Arm cmd -> {cmd.strip()}")
+        except Exception as e:
+            self.log_to_terminal(f"Serial write error: {e}")
+
+    def handle_appliance_gesture(self, gesture_id):
+        if not self.serial_conn or not self.serial_conn.is_open:
+            return  # cannot send commands
+
+        delta = 4  # degrees per gesture
+        # Example mapping; adjust based on your gesture set:
+        if gesture_id == 0:  # base +
+            joint = 1
+            new_angle = min(180, self.current_servo_angles[joint] + delta)
+            self.current_servo_angles[joint] = new_angle
+            self.send_servo_command(joint, new_angle)
+        elif gesture_id == 1:  # base -
+            joint = 0
+            new_angle = max(0, self.current_servo_angles[joint] - delta)
+            self.current_servo_angles[joint] = new_angle
+            self.send_servo_command(joint, new_angle)
+        elif gesture_id == 2:  # shoulder +
+            joint = 1
+            new_angle = min(180, self.current_servo_angles[joint] + delta)
+            self.current_servo_angles[joint] = new_angle
+            self.send_servo_command(joint, new_angle)
+        elif gesture_id == 3:  # shoulder -
+            joint = 1
+            new_angle = max(0, self.current_servo_angles[joint] - delta)
+            self.current_servo_angles[joint] = new_angle
+            self.send_servo_command(joint, new_angle)
+        elif gesture_id == 4:  # elbow +
+            joint = 2
+            new_angle = min(180, self.current_servo_angles[joint] + delta)
+            self.current_servo_angles[joint] = new_angle
+            self.send_servo_command(joint, new_angle)
+        elif gesture_id == 5:  # elbow -
+            joint = 2
+            new_angle = max(0, self.current_servo_angles[joint] - delta)
+            self.current_servo_angles[joint] = new_angle
+            self.send_servo_command(joint, new_angle)
+        elif gesture_id == 6:  # wrist pitch +
+            joint = 3
+            new_angle = min(180, self.current_servo_angles[joint] + delta)
+            self.current_servo_angles[joint] = new_angle
+            self.send_servo_command(joint, new_angle)
+        elif gesture_id == 7:  # wrist pitch -
+            joint = 3
+            new_angle = max(0, self.current_servo_angles[joint] - delta)
+            self.current_servo_angles[joint] = new_angle
+            self.send_servo_command(joint, new_angle)
+        elif gesture_id == 8:  # wrist roll + (or gripper open)
+            joint = 4
+            new_angle = min(180, self.current_servo_angles[joint] + delta)
+            self.current_servo_angles[joint] = new_angle
+            self.send_servo_command(joint, new_angle)
+        elif gesture_id == 9:  # wrist roll - (or gripper close)
+            joint = 4
+            new_angle = max(0, self.current_servo_angles[joint] - delta)
+            self.current_servo_angles[joint] = new_angle
+            self.send_servo_command(joint, new_angle)
+        else:
+            # no recognized gesture for arm
+            pass
+
+    def handle_application_gesture(self, gesture_id):
+        # Example mapping: adjust as per your trained gestures
+        # e.g., 3 = next slide, 8 = previous slide, 1 = play/pause, etc.
+        # Use self.prev_action to avoid repeats, or a cooldown if needed.
+        if gesture_id == 1:  # e.g., fist -> play/pause
+            if self.prev_action != "play_pause":
+                pyautogui.press("space")
+                self.log_to_terminal("Media: Play/Pause")
+                self.prev_action = "play_pause"
+        elif gesture_id == 3:  # swipe right -> next slide
+            if self.prev_action != "next_slide":
+                pyautogui.press("right")
+                self.log_to_terminal("Media: Next Slide")
+                self.prev_action = "next_slide"
+        elif gesture_id == 8:  # swipe left -> previous slide
+            if self.prev_action != "prev_slide":
+                pyautogui.press("left")
+                self.log_to_terminal("Media: Previous Slide")
+                self.prev_action = "prev_slide"
+        elif gesture_id == 2:  # thumbs up for volume up
+            if self.prev_action != "vol_up":
+                pyautogui.press("volumeup")
+                self.log_to_terminal("Media: Volume Up")
+                self.prev_action = "vol_up"
+        elif gesture_id == 4:  # thumbs down for volume down (example)
+            if self.prev_action != "vol_down":
+                pyautogui.press("volumedown")
+                self.log_to_terminal("Media: Volume Down")
+                self.prev_action = "vol_down"
+        else:
+            # reset when no relevant gesture
+            self.prev_action = None
 
     def mode_selector(self):
         """handler function for mode selection"""
@@ -368,23 +514,33 @@ class WindowUi(customtkinter.CTk):
                 self.video_label.imgtk = imgtk
                 self.video_label.configure(image=imgtk)
 
+            gesture_id = self.hand_sign_id
+            if gesture_id is not None:
+                if self.control_mode == "application":
+                    self.handle_application_gesture(gesture_id)
+                elif self.control_mode == "appliance":
+                    self.handle_appliance_gesture(gesture_id)
+            else:
+                if self.control_mode == "Application":
+                    self.prev_action = None
             await asyncio.sleep(0.01)  # Small delay to prevent overloading the event loop
             #
-            current_time = time.time()
-            if self.hand_sign_id == 8:  # Swipe left
-                if self.prev_action != "left":
-                    self.log_to_terminal("Swipe Left - Previous Slide")
-                    pyautogui.press("left")
-                    self.prev_action = "left"
+            # current_time = time.time()
+            # if self.hand_sign_id == 8:  # Swipe left
+            #     if self.prev_action != "left":
+            #         self.log_to_terminal("Swipe Left - Previous Slide")
+            #         pyautogui.press("left")
+            #         self.prev_action = "left"
+            #
+            # elif self.hand_sign_id == 3:  # Swipe right
+            #     if self.prev_action != "right":
+            #         self.log_to_terminal("Swipe Right - Next Slide")
+            #         pyautogui.press("right")
+            #         self.prev_action = "right"
 
-            elif self.hand_sign_id == 3:  # Swipe right
-                if self.prev_action != "right":
-                    self.log_to_terminal("Swipe Right - Next Slide")
-                    pyautogui.press("right")
-                    self.prev_action = "right"
-
-            else:
-                self.prev_action = None
+            #
+            # else:
+            #     self.prev_action = None
 
     def start_frame(self):
         self.log_to_terminal(f"Started Capture and Processing")
@@ -446,6 +602,13 @@ class WindowUi(customtkinter.CTk):
             self.fps = False
             self.log_to_terminal("disabled FPS")
 
+    def change_control_mode(self, value):
+        self.log_to_terminal(f"Control Mode set to: {value}")
+        self.control_mode = value
+        # Optionally reset prev_action or other state when mode changes:
+        self.prev_action = None
+        # If switching to Robotic Arm, maybe disable media-specific flags, etc.
+
     def show_white(self):
         """
         sets color of hand drawing
@@ -457,6 +620,31 @@ class WindowUi(customtkinter.CTk):
         else:
             self.white = False
             self.log_to_terminal("disabled Hand Tracing White")
+
+    def connect_serial(self):
+        port = self.serial_port_var.get().strip()
+        try:
+            baud = int(self.baudrate_var.get().strip())
+        except ValueError:
+            self.log_to_terminal("Invalid baud rate.")
+            return
+        try:
+            self.serial_conn = serial.Serial(port, baud, timeout=1)
+            time.sleep(2)  # Wait for Arduino reset if needed
+            self.log_to_terminal(f"Serial connected to {port} @ {baud}")
+            # Optionally, send an init command
+        except Exception as e:
+            self.log_to_terminal(f"Serial connection failed: {e}")
+            self.serial_conn = None
+
+    def disconnect_serial(self):
+        if self.serial_conn and self.serial_conn.is_open:
+            try:
+                self.serial_conn.close()
+                self.log_to_terminal("Serial disconnected.")
+            except Exception as e:
+                self.log_to_terminal(f"Error closing serial: {e}")
+        self.serial_conn = None
 
     def show_blue(self):
         """
